@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* NexQuant Design System — Restrained Institutional Palette */
+    --background: 240 10% 3.9%;      /* #09090b zinc-950 */
+    --foreground: 0 0% 98%;           /* #fafafa zinc-50 */
+    --surface: 240 5.9% 10%;          /* #18181b zinc-900 */
+    --elevated: 240 3.7% 15.9%;       /* #27272a zinc-800 */
+    --border: 240 3.7% 15.9%;         /* #27272a zinc-800 */
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%; /* #a1a1aa zinc-400 */
+    --accent: 217 91% 60%;            /* #3b82f6 blue-500 */
+    --accent-foreground: 0 0% 98%;
+
+    /* Semantic — Market Signals */
+    --bullish: 142 71% 45%;            /* #22c55e green-500 */
+    --bearish: 0 84% 60%;              /* #ef4444 red-500 */
+    --warning: 38 92% 50%;             /* #f59e0b amber-500 */
+
+    --radius: 8px;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Accessible focus indicators */
+  :focus-visible {
+    outline: 2px solid hsl(var(--accent));
+    outline-offset: 2px;
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Premium scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--elevated)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--elevated));
+    border-radius: 3px;
+  }
+
+  /* Tabular numbers for financial data */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
