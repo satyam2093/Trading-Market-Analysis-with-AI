@@ -20,6 +20,7 @@ export interface AssetInfo {
   asset_type: AssetType;
   exchange: string;
   country: string;
+  currency?: string;
   provider_symbol?: string;
 }
 

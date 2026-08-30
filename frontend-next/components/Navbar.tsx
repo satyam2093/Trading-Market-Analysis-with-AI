@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Menu, X, ArrowRight } from "lucide-react";
+import { Search, Menu, X, ArrowRight, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { searchAssets } from "@/lib/api";
 import AuthModal from "@/components/auth/AuthModal";
@@ -15,6 +15,17 @@ const NAV_LINKS = [
   { href: "/news", label: "News" },
   { href: "/watchlist", label: "Watchlist" },
   { href: "/portfolio", label: "Portfolio" },
+];
+
+const POPULAR_SEARCHES = [
+  { symbol: "BTC", name: "Bitcoin", exchange: "BINANCE", asset_type: "CRYPTO" },
+  { symbol: "ETH", name: "Ethereum", exchange: "BINANCE", asset_type: "CRYPTO" },
+  { symbol: "NVDA", name: "NVIDIA Corporation", exchange: "NASDAQ", asset_type: "STOCK" },
+  { symbol: "TSLA", name: "Tesla Inc.", exchange: "NASDAQ", asset_type: "STOCK" },
+  { symbol: "AAPL", name: "Apple Inc.", exchange: "NASDAQ", asset_type: "STOCK" },
+  { symbol: "RELIANCE.NS", name: "Reliance Industries", exchange: "NSE", asset_type: "STOCK" },
+  { symbol: "TCS.NS", name: "Tata Consultancy Services", exchange: "NSE", asset_type: "STOCK" },
+  { symbol: "SPY", name: "SPDR S&P 500 ETF", exchange: "NYSE", asset_type: "ETF" },
 ];
 
 export default function Navbar() {
@@ -63,20 +74,21 @@ export default function Navbar() {
       const data = await searchAssets(query);
       setResults(data?.assets || []);
       setSelectedIdx(0);
-    }, 200);
+    }, 150);
     return () => clearTimeout(timer);
   }, [query]);
 
   // Keyboard navigation in results
   function handleSearchKeyDown(e: React.KeyboardEvent) {
+    const activeList = results.length > 0 ? results : POPULAR_SEARCHES;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIdx((i) => Math.min(i + 1, results.length - 1));
+      setSelectedIdx((i) => Math.min(i + 1, activeList.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setSelectedIdx((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && results[selectedIdx]) {
-      window.location.href = `/assets/${results[selectedIdx].symbol}`;
+    } else if (e.key === "Enter" && activeList[selectedIdx]) {
+      window.location.href = `/assets/${activeList[selectedIdx].symbol}`;
       closeSearch();
     }
   }
@@ -132,7 +144,7 @@ export default function Navbar() {
                 aria-label="Search assets"
               >
                 <Search className="w-4 h-4" />
-                <span className="hidden sm:inline">Search...</span>
+                <span className="hidden sm:inline">Search any stock or crypto...</span>
                 <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono border border-border rounded bg-background text-muted-foreground">
                   ⌘K
                 </kbd>
@@ -223,7 +235,7 @@ export default function Navbar() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
-                  placeholder="Search stocks, crypto, ETFs, indices..."
+                  placeholder="Search any US stock, Indian share, crypto, ETF (e.g. BTC, NVDA, RELIANCE, TSLA)..."
                   className="flex-1 py-3.5 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                 />
                 <kbd className="px-1.5 py-0.5 text-[10px] font-mono border border-border rounded text-muted-foreground">
@@ -231,6 +243,7 @@ export default function Navbar() {
                 </kbd>
               </div>
 
+              {/* Dynamic Search Results */}
               {results.length > 0 && (
                 <ul className="max-h-80 overflow-y-auto py-2 scrollbar-thin">
                   {results.map((asset, idx) => (
@@ -265,15 +278,50 @@ export default function Navbar() {
                 </ul>
               )}
 
+              {/* Empty state with auto fallback candidate */}
               {query.length > 0 && results.length === 0 && (
-                <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No assets found for &ldquo;{query}&rdquo;
+                <div className="p-4">
+                  <div className="text-center text-xs text-muted-foreground mb-3">
+                    Analyzing real-time ticker &ldquo;{query.toUpperCase()}&rdquo; across global exchanges
+                  </div>
+                  <Link
+                    href={`/assets/${query.trim().toUpperCase()}`}
+                    onClick={closeSearch}
+                    className="flex items-center justify-between p-3 rounded-lg bg-background border border-border hover:border-accent text-sm transition-all"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-accent">{query.trim().toUpperCase()}</span>
+                      <span className="text-xs text-muted-foreground">Launch Live Terminal</span>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-accent" />
+                  </Link>
                 </div>
               )}
 
+              {/* Quick Trending Suggestions when query is empty */}
               {query.length === 0 && (
-                <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                  Type a symbol or company name to search
+                <div className="p-3">
+                  <div className="px-2 py-1 text-[11px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                    <TrendingUp className="w-3 h-3 text-accent" /> Popular Discovered Markets
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {POPULAR_SEARCHES.map((asset) => (
+                      <Link
+                        key={asset.symbol}
+                        href={`/assets/${asset.symbol}`}
+                        onClick={closeSearch}
+                        className="flex items-center justify-between p-2.5 rounded-lg hover:bg-elevated text-xs transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-foreground">{asset.symbol}</span>
+                          <span className="text-[11px] text-muted-foreground truncate max-w-[90px]">{asset.name}</span>
+                        </div>
+                        <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-background border border-border text-muted-foreground">
+                          {asset.asset_type}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
