@@ -26,7 +26,7 @@ export default function AssetTerminalPage() {
   const [loading, setLoading] = useState(true);
 
   // Real-time WebSocket streams for this exact symbol
-  const { marketData: wsMarket } = useMarketWebSocket(symbol);
+  const { marketData: wsMarket, connectionState } = useMarketWebSocket(symbol, timeframe);
   const { predictionData: wsPrediction } = usePredictionWebSocket(symbol);
 
   useEffect(() => {
@@ -65,25 +65,14 @@ export default function AssetTerminalPage() {
 
   const currencySymbol = isIndian ? "₹" : "$";
 
-  // Calibrated baseline if data is pending
-  const assetDefaultPrice = isIndian
-    ? 1050.0
-    : symbol.includes("BTC")
-    ? 104800.0
-    : symbol.includes("ETH")
-    ? 3450.0
-    : symbol.includes("SOL")
-    ? 188.5
-    : 180.0;
-
   const candleList = marketData?.data || [];
   const latestCandle = candleList.length > 0 ? candleList[candleList.length - 1] : null;
 
   // Real price (only accept wsMarket if symbol matches)
   const isMatchingWs = wsMarket?.symbol?.toUpperCase() === symbol;
-  const price = (isMatchingWs ? wsMarket?.price : null) || latestCandle?.close || assetDefaultPrice;
+  const price = (isMatchingWs ? wsMarket?.price : null) || latestCandle?.close || 0;
 
-  const dataStatus = wsMarket?.data_status || marketData?.data_status || "LIVE";
+  const dataStatus = wsMarket?.market_status || wsMarket?.data_status || marketData?.data_status || "UNAVAILABLE";
   const signal = wsPrediction?.signal || signalData?.analysis?.signal || "BUY";
   const confidence = wsPrediction?.confidence || (signalData?.analysis?.confidence ? Math.round(signalData.analysis.confidence * 100) : 82);
   const regime = wsPrediction?.regime || signalData?.analysis?.regime || "BULLISH";
@@ -184,7 +173,8 @@ export default function AssetTerminalPage() {
       <TradingViewChart
         symbol={symbol}
         data={marketData?.data}
-        livePrice={price}
+        liveTick={isMatchingWs ? wsMarket : null}
+        streamState={connectionState}
         currencySymbol={currencySymbol}
         timeframe={timeframe}
         onTimeframeChange={setTimeframe}

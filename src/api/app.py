@@ -227,8 +227,18 @@ def get_market_data(asset_id: str, timeframe: str = "1d", limit: int = 150):
             else:
                 ts_str = str(ts)
 
+            unix_val = None
+            if hasattr(ts, "timestamp"):
+                unix_val = int(ts.timestamp())
+            elif isinstance(ts, str):
+                try:
+                    unix_val = int(pd.to_datetime(ts).timestamp())
+                except Exception:
+                    pass
+
             record = {
                 "timestamp": ts_str,
+                "unix_time": unix_val,
                 "open": round(float(row["open"]), 2) if not pd.isna(row["open"]) else 0.0,
                 "high": round(float(row["high"]), 2) if not pd.isna(row["high"]) else 0.0,
                 "low": round(float(row["low"]), 2) if not pd.isna(row["low"]) else 0.0,
@@ -327,26 +337,84 @@ def remove_from_watchlist(req: WatchlistRequest):
     ok = watchlist_service.remove_from_watchlist(req.asset_id, user_id=req.user_id)
     return {"success": ok, "asset_id": req.asset_id}
 
-# ── Helper for WebSocket Payloads ───────────────────────────────
+# ── Helpers for WebSocket Payloads ──────────────────────────────
+def _is_market_in_session(asset_info: dict) -> tuple[bool, str]:
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    asset_type = asset_info.get("asset_type", "STOCK")
+    exchange = asset_info.get("exchange", "NASDAQ")
+    symbol = asset_info.get("symbol", "")
 
-def _build_market_payload(symbol: str) -> dict:
-    data = market_service.fetch_processed_market_data(symbol, timeframe="1d", limit=30)
-    df = data.get("df")
-    if df is not None and not df.empty:
-        latest = df.iloc[-1]
-        close_price = float(latest["close"])
+    if asset_type == "CRYPTO" or "-USD" in symbol or symbol in ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "AVAX", "LINK", "NEAR", "SUI"]:
+        return True, "LIVE"
+
+    weekday = now_utc.weekday()  # 0 is Mon, 6 is Sun
+    if weekday >= 5:  # Saturday or Sunday
+        return False, "MARKET_CLOSED"
+
+    hour = now_utc.hour
+    minute = now_utc.minute
+    time_minutes = hour * 60 + minute
+
+    if exchange in ["NSE", "BSE"] or asset_info.get("country") == "India" or symbol.endswith(".NS"):
+        # 09:15 to 15:30 IST is 03:45 to 10:00 UTC
+        if 225 <= time_minutes <= 600:
+            return True, "LIVE"
+        return False, "MARKET_CLOSED"
+    else:
+        # US: 09:30 to 16:00 EST is 13:30 to 20:00 UTC (14:30 to 21:00 EST)
+        if 810 <= time_minutes <= 1260:
+            return True, "LIVE"
+        return False, "MARKET_CLOSED"
+
+def _build_market_payload(symbol: str, timeframe: str = "1d") -> dict:
+    asset_info = discovery_service.get_asset_by_id(symbol)
+    if not asset_info:
+        asset_info = {
+            "id": symbol,
+            "symbol": symbol,
+            "name": symbol,
+            "asset_type": "CRYPTO" if "-USD" in symbol or symbol.upper() in ["BTC", "ETH", "SOL"] else "STOCK",
+            "exchange": "NSE" if symbol.endswith(".NS") or "TATA" in symbol.upper() else "NASDAQ",
+            "currency": "INR" if symbol.endswith(".NS") or "TATA" in symbol.upper() else "USD",
+            "provider_symbol": symbol
+        }
+
+    in_session, session_status = _is_market_in_session(asset_info)
+
+    # First attempt real fast quote from MarketDataService
+    quote = market_service.fetch_live_quote(symbol)
+    if quote and quote.get("price", 0) > 0 and quote.get("data_status") != "UNAVAILABLE":
         return {
             "channel": "market",
             "symbol": symbol.upper(),
-            "price": close_price,
-            "open": float(latest["open"]),
-            "high": float(latest["high"]),
-            "low": float(latest["low"]),
-            "volume": float(latest["volume"]),
-            "timestamp": latest["timestamp"].isoformat() if hasattr(latest["timestamp"], "isoformat") else str(latest["timestamp"]),
-            "data_status": data["data_status"]
+            "price": quote["price"],
+            "open": quote["open"],
+            "high": quote["high"],
+            "low": quote["low"],
+            "volume": quote["volume"],
+            "timeframe": timeframe,
+            "timestamp": quote["timestamp"],
+            "unix_time": quote["unix_time"],
+            "data_status": session_status if quote["data_status"] == "LIVE" else quote["data_status"],
+            "market_status": session_status
         }
-    return None
+
+    # Never replay a historical candle as a live tick.  The client receives an
+    # explicit unavailable state and retains its already-loaded history.
+    return {
+        "channel": "market",
+        "symbol": symbol.upper(),
+        "price": 0.0,
+        "open": 0.0,
+        "high": 0.0,
+        "low": 0.0,
+        "volume": 0.0,
+        "timeframe": timeframe,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "unix_time": int(datetime.datetime.now(datetime.timezone.utc).timestamp()),
+        "data_status": "MARKET_CLOSED" if session_status == "MARKET_CLOSED" else "UNAVAILABLE",
+        "market_status": session_status,
+    }
 
 def _build_prediction_payload(symbol: str) -> dict:
     data = market_service.fetch_processed_market_data(symbol, timeframe="1d", limit=100)
@@ -374,22 +442,18 @@ def _build_prediction_payload(symbol: str) -> dict:
 # ── Real-Time Streaming WebSocket Gateways ──────────────────────
 
 @app.websocket("/ws/market/{symbol}")
-async def websocket_market(websocket: WebSocket, symbol: str):
+async def websocket_market(websocket: WebSocket, symbol: str, timeframe: str = "1d"):
     await ws_manager.connect(symbol, websocket)
-    payload = _build_market_payload(symbol)
+    payload = _build_market_payload(symbol, timeframe=timeframe)
     if payload:
         await websocket.send_json(payload)
 
     async def _sender():
         try:
             while True:
-                await asyncio.sleep(3)
-                p = _build_market_payload(symbol)
+                await asyncio.sleep(2)
+                p = _build_market_payload(symbol, timeframe=timeframe)
                 if p:
-                    # Add subtle realistic micro-tick variations for real-time live charting
-                    tick_var = (np.random.rand() - 0.49) * 0.0004 * p["price"]
-                    p["price"] = round(p["price"] + tick_var, 2)
-                    p["timestamp"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                     await websocket.send_json(p)
         except Exception:
             pass
@@ -397,7 +461,10 @@ async def websocket_market(websocket: WebSocket, symbol: str):
     sender_task = asyncio.create_task(_sender())
     try:
         while True:
-            await websocket.receive_text()
+            msg = await websocket.receive_text()
+            # Handle client timeframe subscription changes over the same socket if sent
+            if msg and ("1m" in msg or "5m" in msg or "15m" in msg or "1h" in msg or "1d" in msg):
+                timeframe = msg.strip()
     except (WebSocketDisconnect, Exception):
         pass
     finally:

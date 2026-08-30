@@ -172,21 +172,8 @@ class StockMarketDataProvider(BaseMarketDataProvider):
         if "INVALID" in symbol.upper() or "XYZ_9999" in symbol.upper():
             return self._empty_ohlcv_dataframe(symbol, timeframe, status="UNAVAILABLE")
 
-        # Fallback: Generate asset-calibrated realistic series anchored to specific asset baseline
-        clean_key = re.sub(r"[^A-Z0-9]", "", symbol.upper())
-        cat_info = None
-        for k, v in ASSET_PRICE_CATALOG.items():
-            if clean_key == k or clean_key in k or k in clean_key:
-                cat_info = v
-                break
-
-        base_price = cat_info["price"] if cat_info else (
-            1050.0 if "TATA" in symbol.upper() or ".NS" in symbol.upper() else
-            180.0 if any(c in symbol.upper() for c in ["USD", "STOCK", "INC", "CORP"]) else
-            250.0
-        )
-
-        return self._generate_calibrated_series(symbol, base_price, limit=limit or 100)
+        logger.warning("No real OHLCV data available for %s", symbol)
+        return self._empty_ohlcv_dataframe(symbol, timeframe, status="UNAVAILABLE")
 
     def _empty_ohlcv_dataframe(self, symbol: str, timeframe: str, status: str = "UNAVAILABLE") -> pd.DataFrame:
         """Returns empty DataFrame with metadata attributes indicating data unavailability."""

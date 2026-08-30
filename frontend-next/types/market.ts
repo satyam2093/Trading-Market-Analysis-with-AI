@@ -34,6 +34,7 @@ export interface AssetSearchResult {
 
 export interface CandleData {
   timestamp: string;
+  unix_time?: number;
   open: number;
   high: number;
   low: number;
@@ -146,8 +147,11 @@ export interface WSMarketPayload {
   high: number;
   low: number;
   volume: number;
+  timeframe?: string;
   timestamp: string;
+  unix_time?: number;
   data_status: DataStatus;
+  market_status?: string;
 }
 
 export interface WSPredictionPayload {
