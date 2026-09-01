@@ -1,30 +1,186 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { createChart, ColorType, IChartApi, CandlestickSeries, HistogramSeries, LineSeries, UTCTimestamp } from "lightweight-charts";
+import { useEffect, useId, useRef, useState } from "react";
 import type { CandleData, WSMarketPayload } from "@/types/market";
 
-type Candle = { time: UTCTimestamp; open: number; high: number; low: number; close: number; volume: number; ema_20?: number; ema_50?: number };
 type StreamState = "CONNECTED" | "RECONNECTING" | "DISCONNECTED";
 
-interface Props { symbol: string; data?: CandleData[]; liveTick?: WSMarketPayload | null; streamState?: StreamState; currencySymbol?: string; timeframe?: string; onTimeframeChange?: (tf: string) => void; }
-const intervals: Record<string, number> = { "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800, "all": 86400 };
-const valid = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
-function unix(value: string | number | undefined): number | null { if (typeof value === "number" && Number.isFinite(value)) return value > 1e11 ? Math.floor(value / 1000) : Math.floor(value); const parsed = typeof value === "string" ? Date.parse(value) : NaN; return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : null; }
-function bucket(timestamp: number, timeframe: string) { return (Math.floor(timestamp / (intervals[timeframe] || 86400)) * (intervals[timeframe] || 86400)) as UTCTimestamp; }
-function normalize(data: CandleData[], timeframe: string) {
-  const unique = new Map<number, Candle>();
-  data.forEach((item) => { const timestamp = unix(item.unix_time ?? item.timestamp); if (timestamp === null || ![item.open, item.high, item.low, item.close, item.volume].every(valid) || item.open <= 0 || item.close <= 0 || item.high < item.low) return; const time = bucket(timestamp, timeframe); unique.set(time, { time, open: item.open, high: item.high, low: item.low, close: item.close, volume: Math.max(0, item.volume), ema_20: item.ema_20, ema_50: item.ema_50 }); });
-  return Array.from(unique.values()).sort((a, b) => a.time - b.time);
+interface Props {
+  symbol: string;
+  data?: CandleData[];
+  liveTick?: WSMarketPayload | null;
+  streamState?: StreamState;
+  currencySymbol?: string;
+  timeframe?: string;
+  onTimeframeChange?: (tf: string) => void;
 }
 
-export default function TradingViewChart({ symbol, data = [], liveTick, streamState = "DISCONNECTED", currencySymbol = "$", timeframe = "1d", onTimeframeChange }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null); const chartRef = useRef<IChartApi | null>(null); const candlesRef = useRef<any>(null); const volumeRef = useRef<any>(null); const ema20Ref = useRef<any>(null); const ema50Ref = useRef<any>(null); const lastRef = useRef<Candle | null>(null);
-  const [showEMA, setShowEMA] = useState(true); const [showVolume, setShowVolume] = useState(true);
-  useEffect(() => { const container = containerRef.current; if (!container) return; const chart = createChart(container, { layout: { background: { type: ColorType.Solid, color: "#18181b" }, textColor: "#a1a1aa", fontSize: 11, fontFamily: "var(--font-geist-mono), monospace" }, grid: { vertLines: { color: "#27272a" }, horzLines: { color: "#27272a" } }, crosshair: { vertLine: { color: "#71717a", width: 1, style: 2 }, horzLine: { color: "#71717a", width: 1, style: 2 } }, rightPriceScale: { borderColor: "#27272a", scaleMargins: { top: 0.1, bottom: 0.25 } }, timeScale: { borderColor: "#27272a", timeVisible: true }, width: container.clientWidth || 800, height: 400 }); chartRef.current = chart; candlesRef.current = chart.addSeries(CandlestickSeries, { upColor: "#22c55e", downColor: "#ef4444", borderVisible: false, wickUpColor: "#22c55e", wickDownColor: "#ef4444" }); volumeRef.current = chart.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "volume" }); chart.priceScale("volume").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } }); ema20Ref.current = chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 1, title: "EMA 20" }); ema50Ref.current = chart.addSeries(LineSeries, { color: "#a855f7", lineWidth: 1, title: "EMA 50" }); const resize = () => chart.applyOptions({ width: container.clientWidth || 800 }); const observer = new ResizeObserver(resize); observer.observe(container); return () => { observer.disconnect(); chart.remove(); chartRef.current = null; }; }, []);
-  useEffect(() => { chartRef.current?.applyOptions({ localization: { priceFormatter: (price: number) => `${currencySymbol}${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` } }); }, [currencySymbol]);
-  useEffect(() => { if (!candlesRef.current) return; const candles = normalize(data, timeframe); lastRef.current = candles.at(-1) ?? null; candlesRef.current.setData(candles.map(({ volume, ema_20, ema_50, ...candle }) => candle)); volumeRef.current.setData(showVolume ? candles.map((c) => ({ time: c.time, value: c.volume, color: c.close >= c.open ? "rgba(34,197,94,.35)" : "rgba(239,68,68,.35)" })) : []); ema20Ref.current.setData(showEMA ? candles.filter((c) => valid(c.ema_20)).map((c) => ({ time: c.time, value: c.ema_20! })) : []); ema50Ref.current.setData(showEMA ? candles.filter((c) => valid(c.ema_50)).map((c) => ({ time: c.time, value: c.ema_50! })) : []); if (candles.length) chartRef.current?.timeScale().fitContent(); }, [data, timeframe, showEMA, showVolume]);
-  useEffect(() => { if (!liveTick || !candlesRef.current || liveTick.symbol.toUpperCase() !== symbol.toUpperCase() || !valid(liveTick.price) || liveTick.price <= 0) return; const timestamp = unix(liveTick.unix_time ?? liveTick.timestamp); if (timestamp === null) return; const time = bucket(timestamp, timeframe); const previous = lastRef.current; if (previous && time < previous.time) return; const quoteHigh = valid(liveTick.high) ? liveTick.high : liveTick.price; const quoteLow = valid(liveTick.low) ? liveTick.low : liveTick.price; const next: Candle = previous && time === previous.time ? { ...previous, high: Math.max(previous.high, liveTick.price, quoteHigh), low: Math.min(previous.low, liveTick.price, quoteLow), close: liveTick.price, volume: Math.max(previous.volume, Number(liveTick.volume) || 0) } : { time, open: previous?.close ?? liveTick.price, high: Math.max(liveTick.price, quoteHigh), low: Math.min(liveTick.price, quoteLow), close: liveTick.price, volume: Math.max(0, Number(liveTick.volume) || 0) }; lastRef.current = next; candlesRef.current.update({ time: next.time, open: next.open, high: next.high, low: next.low, close: next.close }); if (showVolume) volumeRef.current.update({ time: next.time, value: next.volume, color: next.close >= next.open ? "rgba(34,197,94,.35)" : "rgba(239,68,68,.35)" }); }, [liveTick, symbol, timeframe, showVolume]);
-  const status = liveTick?.market_status === "MARKET_CLOSED" ? "MARKET CLOSED" : liveTick?.data_status === "DELAYED" ? "DELAYED" : liveTick?.data_status === "UNAVAILABLE" ? "FEED UNAVAILABLE" : streamState === "CONNECTED" && liveTick ? "LIVE" : "RECONNECTING"; const lastUpdate = liveTick?.timestamp ? new Date(liveTick.timestamp).toLocaleTimeString() : "--:--:--";
-  return <div className="p-6 rounded-xl bg-surface border border-border space-y-4"><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div className="space-y-0.5"><div className="flex items-center gap-2"><h3 className="text-sm font-semibold text-foreground">TradingView Lightweight Candlestick Chart</h3><span className="text-xs font-mono text-accent">({symbol})</span><span className="px-2 py-0.2 rounded-full bg-bullish/10 border border-bullish/30 text-bullish text-[10px] font-mono">{status === "LIVE" ? "●" : "○"} {status}</span></div><p className="text-xs text-muted-foreground">Last update: {lastUpdate}</p></div><div className="flex items-center gap-2 flex-wrap"><button onClick={() => setShowEMA(!showEMA)} className="px-2.5 py-1 rounded text-xs font-mono border border-border">EMA (20/50)</button><button onClick={() => setShowVolume(!showVolume)} className="px-2.5 py-1 rounded text-xs font-mono border border-border">Volume</button><div className="flex items-center rounded border border-border bg-background p-0.5">{["1m", "5m", "15m", "1h", "1d", "all"].map((tf) => <button key={tf} onClick={() => onTimeframeChange?.(tf)} className={`px-2 py-0.5 rounded text-xs font-mono uppercase ${timeframe === tf ? "bg-elevated text-foreground font-semibold" : "text-muted-foreground"}`}>{tf === "all" ? "ALL" : tf}</button>)}</div></div></div><div ref={containerRef} className="w-full h-[400px] rounded-lg overflow-hidden" /><div className="flex items-center gap-6 pt-2 border-t border-border/40 text-xs font-mono text-muted-foreground"><span><span className="w-2.5 h-2.5 inline-block rounded-sm bg-bullish" /> Bullish Candle</span><span><span className="w-2.5 h-2.5 inline-block rounded-sm bg-bearish" /> Bearish Candle</span>{liveTick?.price ? <span className="ml-auto text-foreground font-semibold">Live Tick: {currencySymbol}{liveTick.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> : null}</div></div>;
+const intervalMap: Record<string, string> = {
+  "1m": "1",
+  "5m": "5",
+  "15m": "15",
+  "30m": "30",
+  "1h": "60",
+  "4h": "240",
+  "1d": "D",
+  "1w": "W",
+  all: "D",
+};
+
+function resolveTradingViewSymbol(symbol: string) {
+  const normalized = symbol.trim().toUpperCase();
+  if (!normalized) return "BINANCE:BTCUSDT";
+
+  const base = normalized.replace(/\.[A-Z]+$/, "");
+
+  if (normalized.endsWith(".NS")) return `NSE:${base}`;
+  if (normalized.endsWith(".BO")) return `BSE:${base}`;
+  if (["BTC", "ETH", "SOL", "ADA", "XRP", "BNB", "DOGE", "LINK", "AVAX", "DOT"].includes(normalized)) return `BINANCE:${normalized}USDT`;
+  if (["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "NFLX", "WMT", "AMD", "INTC"].includes(normalized)) return `NASDAQ:${normalized}`;
+  if (["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "ITC", "LTIM", "SUNPHARMA"].includes(normalized)) return `NSE:${normalized}`;
+  if (normalized.includes(":")) return normalized;
+
+  return `BINANCE:${normalized}USDT`;
+}
+
+export default function TradingViewChart({
+  symbol,
+  data = [],
+  liveTick,
+  streamState = "DISCONNECTED",
+  currencySymbol = "$",
+  timeframe = "1d",
+  onTimeframeChange,
+}: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const widgetRef = useRef<any>(null);
+  const widgetId = useId();
+  const [isScriptReady, setIsScriptReady] = useState(false);
+
+  useEffect(() => {
+    const loadWidget = () => {
+      if (!containerRef.current || typeof window === "undefined") return;
+      const target = containerRef.current;
+      const TradingView = (window as any).TradingView;
+      if (!TradingView?.widget) return;
+
+      target.innerHTML = "";
+      widgetRef.current = new TradingView.widget({
+        autosize: true,
+        symbol: resolveTradingViewSymbol(symbol),
+        interval: intervalMap[timeframe] || "D",
+        timezone: "Etc/UTC",
+        theme: "dark",
+        style: "1",
+        locale: "en",
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        hide_top_toolbar: false,
+        save_image: false,
+        withdateranges: true,
+        allow_symbol_change: false,
+        details: true,
+        container_id: widgetId,
+        studies: ["Volume@tv-basicstudies", "RSI@tv-basicstudies"],
+      });
+    };
+
+    const scriptUrl = "https://s3.tradingview.com/tv.js";
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${scriptUrl}"]`);
+
+    if ((window as any).TradingView?.widget) {
+      setIsScriptReady(true);
+      loadWidget();
+      return;
+    }
+
+    if (existing) {
+      existing.addEventListener("load", () => {
+        setIsScriptReady(true);
+        loadWidget();
+      }, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = scriptUrl;
+    script.async = true;
+    script.onload = () => {
+      setIsScriptReady(true);
+      loadWidget();
+    };
+    script.onerror = () => setIsScriptReady(false);
+    document.body.appendChild(script);
+
+    return () => {
+      script.onload = null;
+      script.onerror = null;
+    };
+  }, [symbol, timeframe, widgetId]);
+
+  const status =
+    liveTick?.market_status === "MARKET_CLOSED"
+      ? "MARKET CLOSED"
+      : liveTick?.data_status === "DELAYED"
+        ? "DELAYED"
+        : liveTick?.data_status === "UNAVAILABLE"
+          ? "FEED UNAVAILABLE"
+          : streamState === "CONNECTED" && liveTick
+            ? "LIVE"
+            : "RECONNECTING";
+
+  const lastUpdate = liveTick?.timestamp ? new Date(liveTick.timestamp).toLocaleTimeString() : "--:--:--";
+
+  return (
+    <div className="p-6 rounded-xl bg-surface border border-border space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-semibold text-foreground">TradingView Advanced Chart</h3>
+            <span className="text-xs font-mono text-accent">({symbol})</span>
+            <span className="px-2 py-0.5 rounded-full bg-bullish/10 border border-bullish/30 text-bullish text-[10px] font-mono">
+              {status === "LIVE" ? "●" : "○"} {status}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">Last update: {lastUpdate}</p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center rounded border border-border bg-background p-0.5">
+            {Object.keys(intervalMap).map((tf) => (
+              <button
+                key={tf}
+                onClick={() => onTimeframeChange?.(tf)}
+                className={`px-2 py-0.5 rounded text-xs font-mono uppercase ${timeframe === tf ? "bg-elevated text-foreground font-semibold" : "text-muted-foreground"}`}
+              >
+                {tf === "all" ? "ALL" : tf}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div
+        id={widgetId}
+        ref={containerRef}
+        className="w-full h-[420px] rounded-lg overflow-hidden border border-border/50 bg-background"
+      />
+
+      {!isScriptReady && (
+        <div className="flex items-center justify-center h-[64px] rounded-lg border border-dashed border-border text-xs font-mono text-muted-foreground">
+          Loading TradingView chart...
+        </div>
+      )}
+
+      <div className="flex items-center gap-6 pt-2 border-t border-border/40 text-xs font-mono text-muted-foreground">
+        <span><span className="w-2.5 h-2.5 inline-block rounded-sm bg-bullish" /> Bullish Candle</span>
+        <span><span className="w-2.5 h-2.5 inline-block rounded-sm bg-bearish" /> Bearish Candle</span>
+        {liveTick?.price ? (
+          <span className="ml-auto text-foreground font-semibold">
+            Live Tick: {currencySymbol}{liveTick.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
 }

@@ -7,12 +7,14 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: "signin" | "signup";
+  onAuthenticated?: () => void;
 }
 
 export default function AuthModal({
   isOpen,
   onClose,
   initialMode = "signin",
+  onAuthenticated,
 }: AuthModalProps) {
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [email, setEmail] = useState("");
@@ -28,6 +30,10 @@ export default function AuthModal({
     setIsSuccess(true);
     setTimeout(() => {
       setIsSuccess(false);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("nexquant-auth", "true");
+      }
+      onAuthenticated?.();
       onClose();
     }, 1500);
   };

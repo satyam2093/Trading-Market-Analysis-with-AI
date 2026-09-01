@@ -34,10 +34,17 @@ export default function Navbar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AssetInfo[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("nexquant-auth") === "true";
+    setIsAuthenticated(saved);
+  }, []);
 
   // Keyboard shortcut: Ctrl+K or Cmd+K
   useEffect(() => {
@@ -105,6 +112,18 @@ export default function Navbar() {
     setMobileOpen(false);
   }
 
+  function handleAuthenticated() {
+    setIsAuthenticated(true);
+    setAuthModalOpen(false);
+  }
+
+  function handleSignOut() {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("nexquant-auth");
+    }
+    setIsAuthenticated(false);
+  }
+
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
@@ -151,18 +170,37 @@ export default function Navbar() {
               </button>
 
               {/* Functional Auth buttons */}
-              <button
-                onClick={() => openAuth("signin")}
-                className="hidden sm:inline-flex text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => openAuth("signup")}
-                className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium bg-foreground text-background px-4 py-2 rounded-md hover:bg-foreground/90 transition-colors"
-              >
-                Get Started
-              </button>
+              {!isAuthenticated ? (
+                <>
+                  <button
+                    onClick={() => openAuth("signin")}
+                    className="hidden sm:inline-flex text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => openAuth("signup")}
+                    className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium bg-foreground text-background px-4 py-2 rounded-md hover:bg-foreground/90 transition-colors"
+                  >
+                    Get Started
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/watchlist"
+                    className="hidden sm:inline-flex text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
+                  >
+                    My Terminal
+                  </Link>
+                  <button
+                    onClick={handleSignOut}
+                    className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium bg-surface border border-border text-foreground px-4 py-2 rounded-md hover:bg-elevated transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              )}
 
               {/* Mobile menu toggle */}
               <button
@@ -196,18 +234,38 @@ export default function Navbar() {
                 </Link>
               ))}
               <div className="pt-3 border-t border-border mt-3 space-y-2">
-                <button
-                  onClick={() => openAuth("signin")}
-                  className="w-full text-left px-3 py-2.5 text-sm text-muted-foreground"
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => openAuth("signup")}
-                  className="w-full text-center px-3 py-2.5 text-sm font-medium bg-foreground text-background rounded-md"
-                >
-                  Get Started
-                </button>
+                {!isAuthenticated ? (
+                  <>
+                    <button
+                      onClick={() => openAuth("signin")}
+                      className="w-full text-left px-3 py-2.5 text-sm text-muted-foreground"
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      onClick={() => openAuth("signup")}
+                      className="w-full text-center px-3 py-2.5 text-sm font-medium bg-foreground text-background rounded-md"
+                    >
+                      Get Started
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/watchlist"
+                      onClick={() => setMobileOpen(false)}
+                      className="block w-full text-left px-3 py-2.5 text-sm text-muted-foreground"
+                    >
+                      My Terminal
+                    </Link>
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full text-center px-3 py-2.5 text-sm font-medium bg-surface border border-border text-foreground rounded-md"
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                )}
               </div>
             </nav>
           </div>
@@ -219,6 +277,7 @@ export default function Navbar() {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         initialMode={authMode}
+        onAuthenticated={handleAuthenticated}
       />
 
       {/* Search Command Palette */}

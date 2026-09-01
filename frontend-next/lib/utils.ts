@@ -8,22 +8,31 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Format a number as currency with proper locale support.
  */
+export function getCurrencyCode(currency?: string): "INR" | "USD" {
+  const normalized = (currency || "USD").toUpperCase();
+  return normalized === "INR" ? "INR" : "USD";
+}
+
 export function formatCurrency(
   value: number,
   currency: string = "USD",
   locale: string = "en-US"
 ): string {
-  if (currency === "INR") {
-    return new Intl.NumberFormat("en-IN", {
+  const normalizedCurrency = getCurrencyCode(currency);
+
+  if (normalizedCurrency === "INR") {
+    const formatted = new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
+    return formatted.replace("₹", "Rs ");
   }
+
   return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency,
+    currency: normalizedCurrency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);

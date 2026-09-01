@@ -5,12 +5,20 @@ import Link from "next/link";
 import { ArrowRight, TrendingUp, Activity, CheckCircle2 } from "lucide-react";
 import { fetchMarketOverview } from "@/lib/api";
 import AuthModal from "@/components/auth/AuthModal";
+import { formatCurrency } from "@/lib/utils";
 import type { MarketOverviewItem } from "@/types/market";
 
 export default function HomePage() {
   const [indices, setIndices] = useState<MarketOverviewItem[]>([]);
   const [loadingIndices, setLoadingIndices] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsAuthenticated(localStorage.getItem("nexquant-auth") === "true");
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -28,10 +36,10 @@ export default function HomePage() {
   }, []);
 
   const featuredAssets = [
-    { symbol: "BTC", name: "Bitcoin", price: 108421.32, changePct: 2.31, signal: "BUY", confidence: 82, regime: "BULLISH", risk: "MEDIUM", type: "CRYPTO" },
-    { symbol: "NVDA", name: "NVIDIA Corp", price: 128.50, changePct: 1.85, signal: "BUY", confidence: 86, regime: "BULLISH", risk: "LOW", type: "NASDAQ" },
-    { symbol: "RELIANCE.NS", name: "Reliance Industries", price: 2980.40, changePct: 0.82, signal: "BUY", confidence: 79, regime: "BULLISH", risk: "LOW", type: "NSE" },
-    { symbol: "ETH", name: "Ethereum", price: 3450.80, changePct: 2.65, signal: "BUY", confidence: 80, regime: "BULLISH", risk: "MEDIUM", type: "CRYPTO" },
+    { symbol: "BTC", name: "Bitcoin", price: 108421.32, changePct: 2.31, signal: "BUY", confidence: 82, regime: "BULLISH", risk: "MEDIUM", type: "CRYPTO", currency: "USD" },
+    { symbol: "NVDA", name: "NVIDIA Corp", price: 128.50, changePct: 1.85, signal: "BUY", confidence: 86, regime: "BULLISH", risk: "LOW", type: "NASDAQ", currency: "USD" },
+    { symbol: "RELIANCE.NS", name: "Reliance Industries", price: 2980.40, changePct: 0.82, signal: "BUY", confidence: 79, regime: "BULLISH", risk: "LOW", type: "NSE", currency: "INR" },
+    { symbol: "ETH", name: "Ethereum", price: 3450.80, changePct: 2.65, signal: "BUY", confidence: 80, regime: "BULLISH", risk: "MEDIUM", type: "CRYPTO", currency: "USD" },
   ];
 
   const pipelineStages = [
@@ -185,7 +193,7 @@ export default function HomePage() {
 
                 <div className="space-y-1">
                   <div className="text-2xl font-mono font-semibold text-foreground tabular-nums">
-                    ${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {formatCurrency(asset.price, asset.currency)}
                   </div>
                   <div className="text-xs font-mono text-bullish flex items-center gap-1">
                     <TrendingUp className="w-3.5 h-3.5" /> +{asset.changePct}% (24h)
@@ -298,17 +306,24 @@ export default function HomePage() {
           >
             Launch Terminal <ArrowRight className="w-4 h-4" />
           </Link>
-          <button
-            onClick={() => setAuthOpen(true)}
-            className="inline-flex items-center gap-2 px-6 py-3.5 rounded-md bg-surface border border-border text-sm font-semibold text-foreground hover:bg-elevated transition-colors"
-          >
-            Get Started Free
-          </button>
+          {!isAuthenticated && (
+            <button
+              onClick={() => setAuthOpen(true)}
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-md bg-surface border border-border text-sm font-semibold text-foreground hover:bg-elevated transition-colors"
+            >
+              Get Started Free
+            </button>
+          )}
         </div>
       </section>
 
       {/* Auth Modal */}
-      <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} initialMode="signup" />
+      <AuthModal
+        isOpen={authOpen}
+        onClose={() => setAuthOpen(false)}
+        initialMode="signup"
+        onAuthenticated={() => setIsAuthenticated(true)}
+      />
     </div>
   );
 }

@@ -18,7 +18,7 @@ class CryptoMarketDataProvider(BaseMarketDataProvider):
         self._stock_provider = StockMarketDataProvider()
 
     def get_supported_timeframes(self) -> List[str]:
-        return ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+        return ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "all"]
 
     def fetch_ohlcv(
         self,

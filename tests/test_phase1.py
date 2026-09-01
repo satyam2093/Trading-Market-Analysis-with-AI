@@ -40,6 +40,16 @@ def test_stock_data_provider():
     for col in required_cols:
         assert col in df.columns
 
+
+def test_lifetime_timeframe_support():
+    provider = StockMarketDataProvider()
+    df = provider.fetch_ohlcv("AAPL", timeframe="all", limit=10)
+    assert isinstance(df, pd.DataFrame)
+    assert not df.empty
+    assert len(df) <= 10
+    assert "timestamp" in df.columns
+
+
 def test_crypto_data_provider():
     provider = CryptoMarketDataProvider()
     df = provider.fetch_ohlcv("BTC", timeframe="1d", limit=20)

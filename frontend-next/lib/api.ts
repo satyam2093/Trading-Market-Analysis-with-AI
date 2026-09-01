@@ -4,7 +4,12 @@
  * Returns null on failure; UI handles loading/error states.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_RENDER_API_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://your-render-backend.onrender.com"
+    : "http://localhost:8000");
 
 async function apiFetch<T>(path: string): Promise<T | null> {
   try {
@@ -113,7 +118,12 @@ export function fetchSystemStatus() {
 
 // ── WebSocket URLs ───────────────────────────
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+const WS_BASE =
+  process.env.NEXT_PUBLIC_WS_URL ||
+  process.env.NEXT_PUBLIC_RENDER_WS_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "wss://your-render-backend.onrender.com"
+    : "ws://localhost:8000");
 
 export function getMarketWSUrl(symbol: string) {
   return `${WS_BASE}/ws/market/${symbol}`;

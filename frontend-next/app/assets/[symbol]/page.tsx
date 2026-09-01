@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { fetchMarketData, fetchEnsembleSignal, fetchFundamentals } from "@/lib/api";
 import { useMarketWebSocket, usePredictionWebSocket } from "@/lib/useWebSocket";
+import { getCurrencyCode } from "@/lib/utils";
 import TradingViewChart from "@/components/charts/TradingViewChart";
 import AIOutlook from "@/components/ai/AIOutlook";
 import TechnicalSummary from "@/components/technical/TechnicalSummary";
@@ -22,7 +23,7 @@ export default function AssetTerminalPage() {
   const [marketData, setMarketData] = useState<MarketDataResponse | null>(null);
   const [signalData, setSignalData] = useState<any>(null);
   const [fundData, setFundData] = useState<FundamentalsResponse | null>(null);
-  const [timeframe, setTimeframe] = useState("1d");
+  const [timeframe, setTimeframe] = useState("all");
   const [loading, setLoading] = useState(true);
 
   // Real-time WebSocket streams for this exact symbol
@@ -51,7 +52,7 @@ export default function AssetTerminalPage() {
     };
   }, [symbol, timeframe]);
 
-  // Determine currency and asset class
+  // Determine market currency: Indian market assets should display INR as Rs, international assets stay in USD.
   const isIndian =
     symbol.includes(".NS") ||
     symbol.includes(".BO") ||
@@ -63,7 +64,8 @@ export default function AssetTerminalPage() {
     marketData?.asset_info?.exchange === "NSE" ||
     marketData?.asset_info?.exchange === "BSE";
 
-  const currencySymbol = isIndian ? "₹" : "$";
+  const currencySymbol = isIndian ? "Rs" : "$";
+  const marketCurrency = getCurrencyCode(isIndian ? "INR" : "USD");
 
   const candleList = marketData?.data || [];
   const latestCandle = candleList.length > 0 ? candleList[candleList.length - 1] : null;
@@ -145,7 +147,7 @@ export default function AssetTerminalPage() {
               Current Live Price
             </span>
             <span className="text-2xl sm:text-3xl font-mono font-semibold text-foreground tabular-nums tracking-tight">
-              {currencySymbol}{typeof price === "number" ? price.toLocaleString(undefined, { minimumFractionDigits: 2 }) : price}
+              {marketCurrency === "INR" ? `Rs ${typeof price === "number" ? price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : price}` : `$${typeof price === "number" ? price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : price}`}
             </span>
           </div>
 

@@ -4,14 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Star, TrendingUp, TrendingDown, Trash2, Plus, ArrowUpRight } from "lucide-react";
 import { fetchWatchlist, removeFromWatchlist } from "@/lib/api";
+import { formatCurrency } from "@/lib/utils";
 
 export default function WatchlistPage() {
   const [watchlist, setWatchlist] = useState<any[]>([
-    { symbol: "BTC", name: "Bitcoin", price: 108421.32, changePct: 2.31, regime: "BULLISH", signal: "BUY", risk: "MEDIUM" },
-    { symbol: "NVDA", name: "NVIDIA Corp", price: 128.50, changePct: 1.85, regime: "BULLISH", signal: "BUY", risk: "LOW" },
-    { symbol: "RELIANCE.NS", name: "Reliance Industries", price: 2980.40, changePct: 0.82, regime: "BULLISH", signal: "BUY", risk: "LOW" },
-    { symbol: "ETH", name: "Ethereum", price: 3450.80, changePct: 2.65, regime: "BULLISH", signal: "BUY", risk: "MEDIUM" },
-    { symbol: "TSLA", name: "Tesla Inc", price: 220.10, changePct: -1.24, regime: "SIDEWAYS", signal: "HOLD", risk: "HIGH" },
+    { symbol: "BTC", name: "Bitcoin", price: 108421.32, changePct: 2.31, regime: "BULLISH", signal: "BUY", risk: "MEDIUM", currency: "USD" },
+    { symbol: "NVDA", name: "NVIDIA Corp", price: 128.50, changePct: 1.85, regime: "BULLISH", signal: "BUY", risk: "LOW", currency: "USD" },
+    { symbol: "RELIANCE.NS", name: "Reliance Industries", price: 2980.40, changePct: 0.82, regime: "BULLISH", signal: "BUY", risk: "LOW", currency: "INR" },
+    { symbol: "ETH", name: "Ethereum", price: 3450.80, changePct: 2.65, regime: "BULLISH", signal: "BUY", risk: "MEDIUM", currency: "USD" },
+    { symbol: "TSLA", name: "Tesla Inc", price: 220.10, changePct: -1.24, regime: "SIDEWAYS", signal: "HOLD", risk: "HIGH", currency: "USD" },
   ]);
 
   const handleRemove = (symbol: string) => {
@@ -70,7 +71,7 @@ export default function WatchlistPage() {
                     </Link>
                   </td>
                   <td className="p-4 text-foreground font-semibold tabular-nums">
-                    ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {formatCurrency(item.price, item.currency)}
                   </td>
                   <td className="p-4 tabular-nums">
                     <span className={`inline-flex items-center gap-1 ${item.changePct >= 0 ? "text-bullish" : "text-bearish"}`}>

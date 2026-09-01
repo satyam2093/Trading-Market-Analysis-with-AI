@@ -144,6 +144,7 @@ export interface WSMarketPayload {
   channel: "market";
   symbol: string;
   price: number;
+  open: number;
   high: number;
   low: number;
   volume: number;

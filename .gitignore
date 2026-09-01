@@ -1,4 +1,10 @@
-/.env.example
+# Local environment files may contain deployment URLs or secrets. Keep the
+# committed templates available for setup.
+.env
+.env.local
+.env.*.local
+!.env.example
+!frontend-next/.env.example
 
 # Local/generated files
 node_modules/

@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import datetime
+import os
 from typing import Dict, Any, List, Optional
 import numpy as np
 import pandas as pd
@@ -28,10 +29,17 @@ app = FastAPI(
     version="2.1.0"
 )
 
-# Enable CORS for Next.js production frontend
+# Browser origins permitted to call this API.  Production deployments should set
+# CORS_ALLOW_ORIGINS to the Netlify domain(s), separated by commas.
+cors_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

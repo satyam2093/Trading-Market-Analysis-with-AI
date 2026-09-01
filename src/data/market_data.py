@@ -77,7 +77,8 @@ class StockMarketDataProvider(BaseMarketDataProvider):
         "1h": "60m",
         "4h": "60m",
         "1d": "1d",
-        "1w": "1wk"
+        "1w": "1wk",
+        "all": "1d"
     }
 
     def get_supported_timeframes(self) -> List[str]:
@@ -108,12 +109,13 @@ class StockMarketDataProvider(BaseMarketDataProvider):
         end_date: Optional[str] = None,
         limit: int = 500
     ) -> pd.DataFrame:
-        if timeframe not in self.TIMEFRAME_MAP:
+        normalized_timeframe = timeframe.lower()
+        if normalized_timeframe not in self.TIMEFRAME_MAP:
             raise ValueError(f"Unsupported timeframe: {timeframe}. Must be one of {self.get_supported_timeframes()}")
 
-        yf_interval = self.TIMEFRAME_MAP[timeframe]
+        yf_interval = self.TIMEFRAME_MAP[normalized_timeframe]
         tickers_to_try = self._resolve_tickers_to_try(symbol)
-        
+
         df = None
         for t_sym in tickers_to_try:
             try:
@@ -124,7 +126,7 @@ class StockMarketDataProvider(BaseMarketDataProvider):
                 elif start_date:
                     res = ticker.history(start=start_date, interval=yf_interval)
                 else:
-                    period = "2y" if timeframe in ["1d", "1w"] else "60d"
+                    period = "max" if normalized_timeframe == "all" else ("2y" if normalized_timeframe in ["1d", "1w"] else "60d")
                     res = ticker.history(period=period, interval=yf_interval)
 
                 if res is not None and not res.empty and len(res) > 3:
