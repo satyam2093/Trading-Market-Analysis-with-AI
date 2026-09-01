@@ -8,7 +8,7 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_RENDER_API_URL ||
   (process.env.NODE_ENV === "production"
-    ? "https://your-render-backend.onrender.com"
+    ? "https://trading-market-analysis-with-ai.onrender.com"
     : "http://localhost:8000");
 
 async function apiFetch<T>(path: string): Promise<T | null> {
@@ -122,7 +122,7 @@ const WS_BASE =
   process.env.NEXT_PUBLIC_WS_URL ||
   process.env.NEXT_PUBLIC_RENDER_WS_URL ||
   (process.env.NODE_ENV === "production"
-    ? "wss://your-render-backend.onrender.com"
+    ? "wss://trading-market-analysis-with-ai.onrender.com"
     : "ws://localhost:8000");
 
 export function getMarketWSUrl(symbol: string) {

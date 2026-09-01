@@ -28,7 +28,7 @@ export function useMarketWebSocket(symbol: string, timeframe: string) {
   const base =
     process.env.NEXT_PUBLIC_WS_URL ||
     process.env.NEXT_PUBLIC_RENDER_WS_URL ||
-    (process.env.NODE_ENV === "production" ? "wss://your-render-backend.onrender.com" : "ws://localhost:8000");
+    (process.env.NODE_ENV === "production" ? "wss://trading-market-analysis-with-ai.onrender.com" : "ws://localhost:8000");
 
   const { data, connectionState } = useWebSocket<WSMarketPayload>(`${base}/ws/market/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}`);
   return { marketData: data, connectionState };
@@ -38,7 +38,7 @@ export function usePredictionWebSocket(symbol: string) {
   const base =
     process.env.NEXT_PUBLIC_WS_URL ||
     process.env.NEXT_PUBLIC_RENDER_WS_URL ||
-    (process.env.NODE_ENV === "production" ? "wss://your-render-backend.onrender.com" : "ws://localhost:8000");
+    (process.env.NODE_ENV === "production" ? "wss://trading-market-analysis-with-ai.onrender.com" : "ws://localhost:8000");
 
   const { data, connectionState } = useWebSocket<WSPredictionPayload>(`${base}/ws/prediction/${encodeURIComponent(symbol)}`);
   return { predictionData: data, connectionState };

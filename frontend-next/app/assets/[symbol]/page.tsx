@@ -70,9 +70,17 @@ export default function AssetTerminalPage() {
   const candleList = marketData?.data || [];
   const latestCandle = candleList.length > 0 ? candleList[candleList.length - 1] : null;
 
-  // Real price (only accept wsMarket if symbol matches)
+  // Real price: ignore zero-value websocket ticks and prefer the valid candle data if available.
   const isMatchingWs = wsMarket?.symbol?.toUpperCase() === symbol;
-  const price = (isMatchingWs ? wsMarket?.price : null) || latestCandle?.close || 0;
+  const price = (() => {
+    if (isMatchingWs && typeof wsMarket?.price === "number" && wsMarket.price > 0) {
+      return wsMarket.price;
+    }
+    if (typeof latestCandle?.close === "number" && latestCandle.close > 0) {
+      return latestCandle.close;
+    }
+    return 0;
+  })();
 
   const dataStatus = wsMarket?.market_status || wsMarket?.data_status || marketData?.data_status || "UNAVAILABLE";
   const signal = wsPrediction?.signal || signalData?.analysis?.signal || "BUY";
