@@ -27,6 +27,24 @@ const intervalMap: Record<string, string> = {
   all: "D",
 };
 
+function resolveMarketTimezone(symbol: string) {
+  const normalized = symbol.trim().toUpperCase();
+  if (!normalized) return "Etc/UTC";
+
+  if (normalized.endsWith(".NS") || normalized.endsWith(".BO") || [
+    "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "ITC", "WIPRO",
+    "BAJFINANCE", "TATAMOTORS", "LT", "MARUTI", "TITAN", "HAL", "BEL", "ADANIENT",
+    "NIFTY50", "SENSEX"
+  ].includes(normalized)) return "Asia/Kolkata";
+
+  if (["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "NFLX", "AMD",
+    "INTC", "WMT", "PLTR", "COIN", "SPY", "QQQ", "DIA"].includes(normalized)) return "America/New_York";
+
+  if (["BTC", "ETH", "SOL", "ADA", "XRP", "BNB", "DOGE", "LINK", "AVAX", "DOT", "NEAR", "SUI"].includes(normalized)) return "Etc/UTC";
+
+  return "Etc/UTC";
+}
+
 function resolveTradingViewSymbol(symbol: string) {
   const normalized = symbol.trim().toUpperCase();
   if (!normalized) return "BINANCE:BTCUSDT";
@@ -56,6 +74,22 @@ export default function TradingViewChart({
   const widgetRef = useRef<any>(null);
   const widgetId = useId();
   const [isScriptReady, setIsScriptReady] = useState(false);
+  const [userTimezone, setUserTimezone] = useState<string>("Etc/UTC");
+
+  useEffect(() => {
+    const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Etc/UTC";
+    setUserTimezone(fallbackTimezone);
+
+    if (typeof navigator !== "undefined" && "geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        () => setUserTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || fallbackTimezone),
+        () => setUserTimezone(fallbackTimezone),
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
+      );
+    }
+  }, []);
+
+  const chartTimezone = resolveMarketTimezone(symbol);
 
   useEffect(() => {
     const loadWidget = () => {
@@ -69,7 +103,7 @@ export default function TradingViewChart({
         autosize: true,
         symbol: resolveTradingViewSymbol(symbol),
         interval: intervalMap[timeframe] || "D",
-        timezone: "Etc/UTC",
+        timezone: chartTimezone === "Etc/UTC" && userTimezone ? userTimezone : chartTimezone,
         theme: "dark",
         style: "1",
         locale: "en",
@@ -116,7 +150,7 @@ export default function TradingViewChart({
       script.onload = null;
       script.onerror = null;
     };
-  }, [symbol, timeframe, widgetId]);
+  }, [symbol, timeframe, widgetId, chartTimezone, userTimezone]);
 
   const status =
     liveTick?.market_status === "MARKET_CLOSED"
@@ -142,7 +176,7 @@ export default function TradingViewChart({
               {status === "LIVE" ? "●" : "○"} {status}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">Last update: {lastUpdate}</p>
+          <p className="text-xs text-muted-foreground">Last update: {lastUpdate} · Chart timezone: {chartTimezone}</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
