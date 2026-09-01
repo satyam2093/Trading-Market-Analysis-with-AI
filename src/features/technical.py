@@ -21,6 +21,38 @@ class TechnicalAnalysisEngine:
             logger.warning("DataFrame too small to compute technical indicators.")
             return df_out
 
+        if len(df_out) < 30:
+            df_out["ema_20"] = df_out["close"].ewm(span=20, adjust=False).mean()
+            df_out["ema_50"] = df_out["close"].ewm(span=50, adjust=False).mean()
+            df_out["ema_200"] = df_out["close"].ewm(span=200, adjust=False).mean()
+            df_out["ema_ratio_20_50"] = df_out["ema_20"] / (df_out["ema_50"] + 1e-8)
+            df_out["ema_ratio_50_200"] = df_out["ema_50"] / (df_out["ema_200"] + 1e-8)
+            df_out["rsi_14"] = 50.0
+            df_out["macd"] = 0.0
+            df_out["macd_signal"] = 0.0
+            df_out["macd_hist"] = 0.0
+            df_out["adx_14"] = 0.0
+            df_out["di_plus"] = 0.0
+            df_out["di_minus"] = 0.0
+            df_out["atr_14"] = 0.0
+            df_out["bollinger_hband"] = df_out["close"]
+            df_out["bollinger_lband"] = df_out["close"]
+            df_out["bollinger_pband"] = 0.0
+            df_out["bollinger_wband"] = 0.0
+            df_out["returns_1"] = df_out["close"].pct_change(1).fillna(0.0)
+            df_out["returns_5"] = df_out["close"].pct_change(5).fillna(0.0)
+            df_out["returns_20"] = df_out["close"].pct_change(20).fillna(0.0)
+            df_out["log_returns"] = np.log(df_out["close"] / (df_out["close"].shift(1) + 1e-8)).fillna(0.0)
+            df_out["volatility_20"] = df_out["log_returns"].rolling(window=20, min_periods=1).std().fillna(0.0) * np.sqrt(252)
+            df_out["obv"] = ta.volume.on_balance_volume(df_out["close"], df_out["volume"], fillna=True)
+            vwap_obj = ta.volume.VolumeWeightedAveragePrice(df_out["high"], df_out["low"], df_out["close"], df_out["volume"], window=14, fillna=True)
+            df_out["vwap"] = vwap_obj.volume_weighted_average_price()
+            vol_ma20 = df_out["volume"].rolling(window=20, min_periods=1).mean()
+            df_out["volume_ma_ratio_20"] = df_out["volume"] / (vol_ma20 + 1e-8)
+            df_out["stoch_k"] = 50.0
+            df_out["stoch_d"] = 50.0
+            return df_out
+
         # 1. Exponential Moving Averages (EMA)
         df_out["ema_20"] = ta.trend.ema_indicator(df_out["close"], window=20, fillna=True)
         df_out["ema_50"] = ta.trend.ema_indicator(df_out["close"], window=50, fillna=True)
@@ -29,7 +61,10 @@ class TechnicalAnalysisEngine:
         df_out["ema_ratio_50_200"] = df_out["ema_50"] / (df_out["ema_200"] + 1e-8)
 
         # 2. RSI (Relative Strength Index)
-        df_out["rsi_14"] = ta.momentum.rsi(df_out["close"], window=14, fillna=True)
+        if len(df_out) >= 14:
+            df_out["rsi_14"] = ta.momentum.rsi(df_out["close"], window=14, fillna=True)
+        else:
+            df_out["rsi_14"] = 50.0
 
         # 3. MACD (Moving Average Convergence Divergence)
         macd_obj = ta.trend.MACD(df_out["close"], window_slow=26, window_fast=12, window_sign=9, fillna=True)
@@ -38,13 +73,21 @@ class TechnicalAnalysisEngine:
         df_out["macd_hist"] = macd_obj.macd_diff()
 
         # 4. ADX & Directional Movement
-        adx_obj = ta.trend.ADXIndicator(df_out["high"], df_out["low"], df_out["close"], window=14, fillna=True)
-        df_out["adx_14"] = adx_obj.adx()
-        df_out["di_plus"] = adx_obj.adx_pos()
-        df_out["di_minus"] = adx_obj.adx_neg()
+        if len(df_out) >= 14:
+            adx_obj = ta.trend.ADXIndicator(df_out["high"], df_out["low"], df_out["close"], window=14, fillna=True)
+            df_out["adx_14"] = adx_obj.adx()
+            df_out["di_plus"] = adx_obj.adx_pos()
+            df_out["di_minus"] = adx_obj.adx_neg()
+        else:
+            df_out["adx_14"] = 0.0
+            df_out["di_plus"] = 0.0
+            df_out["di_minus"] = 0.0
 
         # 5. ATR (Average True Range)
-        df_out["atr_14"] = ta.volatility.average_true_range(df_out["high"], df_out["low"], df_out["close"], window=14, fillna=True)
+        if len(df_out) >= 14:
+            df_out["atr_14"] = ta.volatility.average_true_range(df_out["high"], df_out["low"], df_out["close"], window=14, fillna=True)
+        else:
+            df_out["atr_14"] = 0.0
 
         # 6. Bollinger Bands
         bb_obj = ta.volatility.BollingerBands(df_out["close"], window=20, window_dev=2, fillna=True)

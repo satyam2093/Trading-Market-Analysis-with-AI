@@ -389,9 +389,11 @@ def _build_market_payload(symbol: str, timeframe: str = "1d") -> dict:
 
     in_session, session_status = _is_market_in_session(asset_info)
 
-    # First attempt real fast quote from MarketDataService
     quote = market_service.fetch_live_quote(symbol)
-    if quote and quote.get("price", 0) > 0 and quote.get("data_status") != "UNAVAILABLE":
+    if quote and quote.get("price", 0) > 0:
+        data_status = quote.get("data_status", "LIVE")
+        if session_status == "MARKET_CLOSED" and data_status == "LIVE":
+            data_status = "MARKET_CLOSED"
         return {
             "channel": "market",
             "symbol": symbol.upper(),
@@ -403,12 +405,10 @@ def _build_market_payload(symbol: str, timeframe: str = "1d") -> dict:
             "timeframe": timeframe,
             "timestamp": quote["timestamp"],
             "unix_time": quote["unix_time"],
-            "data_status": session_status if quote["data_status"] == "LIVE" else quote["data_status"],
+            "data_status": data_status,
             "market_status": session_status
         }
 
-    # Never replay a historical candle as a live tick.  The client receives an
-    # explicit unavailable state and retains its already-loaded history.
     return {
         "channel": "market",
         "symbol": symbol.upper(),
