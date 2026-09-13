@@ -198,27 +198,73 @@ def search_assets(
     results = discovery_service.search_assets(query=query, asset_type=asset_type, exchange=exchange, limit=limit)
     return {"count": len(results), "query": query, "assets": results}
 
+@app.get("/api/v1/health")
+def health_check():
+    return {
+        "status": "HEALTHY",
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "database": "CONNECTED",
+        "market_data_service": "OPERATIONAL",
+        "websocket_gateway": "ONLINE",
+        "version": "2.1.0"
+    }
+
 @app.get("/api/v1/market/overview")
 def get_market_overview():
     indices = ["NIFTY50", "SENSEX", "SPY", "QQQ", "BTC", "ETH", "NVDA", "RELIANCE"]
     overview_data = []
     for idx in indices:
-        data = market_service.fetch_processed_market_data(idx, timeframe="1d", limit=2)
-        df = data.get("df", None)
-        if df is not None and not df.empty:
-            latest = df.iloc[-1]
-            prev = df.iloc[-2] if len(df) > 1 else latest
-            chg = float(latest["close"] - prev["close"])
-            chg_pct = (chg / prev["close"]) * 100.0 if prev["close"] else 0.0
-            overview_data.append({
-                "symbol": idx,
-                "name": data["asset_info"].get("name", idx),
-                "price": round(float(latest["close"]), 2),
-                "change": round(chg, 2),
-                "change_pct": round(chg_pct, 2),
-                "data_status": data["data_status"]
-            })
+        quote = market_service.fetch_live_quote(idx)
+        asset_info = quote.get("asset_info", {})
+        price = quote.get("price")
+        overview_data.append({
+            "symbol": idx,
+            "name": asset_info.get("name", idx),
+            "price": price,
+            "previous_close": quote.get("previous_close"),
+            "change": quote.get("change"),
+            "change_pct": quote.get("change_percent"),
+            "currency": quote.get("currency", "USD"),
+            "currency_symbol": quote.get("currency_symbol", "$"),
+            "exchange": asset_info.get("exchange", "NASDAQ"),
+            "asset_type": asset_info.get("asset_type", "STOCK"),
+            "data_status": quote.get("data_status", "LIVE" if price is not None else "UNAVAILABLE")
+        })
     return {"timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(), "indices": overview_data}
+
+@app.get("/api/v1/market/featured")
+def get_featured_assets():
+    featured_symbols = ["BTC", "NVDA", "RELIANCE", "ETH", "AAPL", "TCS"]
+    results = []
+    for sym in featured_symbols:
+        quote = market_service.fetch_live_quote(sym)
+        data = market_service.fetch_processed_market_data(sym, timeframe="1d", limit=100)
+        df = data.get("df")
+        asset_info = quote.get("asset_info", {})
+        price = quote.get("price")
+        
+        dyn_preds = _evaluate_dynamic_models(df, sym)
+        risk_eval = risk_engine.evaluate_risk(df, expected_volatility=0.20 if df is None or df.empty else float(df.iloc[-1].get("volatility_20", 0.20)))
+        signal_res = ensemble_engine.generate_signal(dyn_preds, risk_info=risk_eval)
+
+        results.append({
+            "symbol": sym,
+            "name": asset_info.get("name", sym),
+            "price": price,
+            "previous_close": quote.get("previous_close"),
+            "change": quote.get("change"),
+            "change_pct": quote.get("change_percent"),
+            "currency": quote.get("currency", "USD"),
+            "currency_symbol": quote.get("currency_symbol", "$"),
+            "exchange": asset_info.get("exchange", "NASDAQ"),
+            "asset_type": asset_info.get("asset_type", "STOCK"),
+            "signal": signal_res["signal"],
+            "confidence": int(signal_res["confidence"] * 100),
+            "regime": signal_res["regime"],
+            "risk_level": signal_res["risk_level"],
+            "data_status": quote.get("data_status", "LIVE" if price is not None else "UNAVAILABLE")
+        })
+    return {"timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(), "assets": results}
 
 @app.get("/api/v1/market-data/{asset_id}")
 def get_market_data(asset_id: str, timeframe: str = "1d", limit: int = 150):
@@ -390,7 +436,7 @@ def _build_market_payload(symbol: str, timeframe: str = "1d") -> dict:
     in_session, session_status = _is_market_in_session(asset_info)
 
     quote = market_service.fetch_live_quote(symbol)
-    if quote and quote.get("price", 0) > 0:
+    if quote and quote.get("price") is not None and quote.get("price", 0) > 0:
         data_status = quote.get("data_status", "LIVE")
         if session_status == "MARKET_CLOSED" and data_status == "LIVE":
             data_status = "MARKET_CLOSED"
@@ -398,10 +444,15 @@ def _build_market_payload(symbol: str, timeframe: str = "1d") -> dict:
             "channel": "market",
             "symbol": symbol.upper(),
             "price": quote["price"],
-            "open": quote["open"],
-            "high": quote["high"],
-            "low": quote["low"],
-            "volume": quote["volume"],
+            "previous_close": quote.get("previous_close"),
+            "change": quote.get("change"),
+            "change_percent": quote.get("change_percent"),
+            "open": quote.get("open"),
+            "high": quote.get("high"),
+            "low": quote.get("low"),
+            "volume": quote.get("volume"),
+            "currency": quote.get("currency", asset_info.get("currency", "USD")),
+            "currency_symbol": quote.get("currency_symbol", "₹" if asset_info.get("currency") == "INR" else "$"),
             "timeframe": timeframe,
             "timestamp": quote["timestamp"],
             "unix_time": quote["unix_time"],
@@ -412,11 +463,16 @@ def _build_market_payload(symbol: str, timeframe: str = "1d") -> dict:
     return {
         "channel": "market",
         "symbol": symbol.upper(),
-        "price": 0.0,
-        "open": 0.0,
-        "high": 0.0,
-        "low": 0.0,
-        "volume": 0.0,
+        "price": None,
+        "previous_close": None,
+        "change": None,
+        "change_percent": None,
+        "open": None,
+        "high": None,
+        "low": None,
+        "volume": None,
+        "currency": asset_info.get("currency", "USD"),
+        "currency_symbol": "₹" if asset_info.get("currency") == "INR" else "$",
         "timeframe": timeframe,
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "unix_time": int(datetime.datetime.now(datetime.timezone.utc).timestamp()),

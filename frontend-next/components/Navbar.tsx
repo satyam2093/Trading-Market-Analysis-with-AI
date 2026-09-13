@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Menu, X, ArrowRight, TrendingUp } from "lucide-react";
+import { Search, Menu, X, ArrowRight, TrendingUp, User, LogOut, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { searchAssets } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import AuthModal from "@/components/auth/AuthModal";
 import type { AssetInfo } from "@/types/market";
 
@@ -30,21 +31,14 @@ const POPULAR_SEARCHES = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const { authLoading, isAuthenticated, user, authModalOpen, authMode, openAuth, closeAuth, login, logout } = useAuth();
+  
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AssetInfo[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = localStorage.getItem("nexquant-auth") === "true";
-    setIsAuthenticated(saved);
-  }, []);
 
   // Keyboard shortcut: Ctrl+K or Cmd+K
   useEffect(() => {
@@ -106,24 +100,6 @@ export default function Navbar() {
     setResults([]);
   }
 
-  function openAuth(mode: "signin" | "signup") {
-    setAuthMode(mode);
-    setAuthModalOpen(true);
-    setMobileOpen(false);
-  }
-
-  function handleAuthenticated() {
-    setIsAuthenticated(true);
-    setAuthModalOpen(false);
-  }
-
-  function handleSignOut() {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("nexquant-auth");
-    }
-    setIsAuthenticated(false);
-  }
-
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
@@ -169,8 +145,10 @@ export default function Navbar() {
                 </kbd>
               </button>
 
-              {/* Functional Auth buttons */}
-              {!isAuthenticated ? (
+              {/* Reactive Auth Buttons */}
+              {authLoading ? (
+                <div className="hidden sm:inline-flex w-24 h-9 rounded-md bg-surface/50 animate-pulse" />
+              ) : !isAuthenticated ? (
                 <>
                   <button
                     onClick={() => openAuth("signin")}
@@ -186,20 +164,33 @@ export default function Navbar() {
                   </button>
                 </>
               ) : (
-                <>
+                <div className="hidden sm:flex items-center gap-2">
                   <Link
                     href="/watchlist"
-                    className="hidden sm:inline-flex text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
+                    className="inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-md hover:bg-surface transition-colors"
                   >
-                    My Terminal
+                    <span>Watchlist</span>
                   </Link>
-                  <button
-                    onClick={handleSignOut}
-                    className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium bg-surface border border-border text-foreground px-4 py-2 rounded-md hover:bg-elevated transition-colors"
+                  <Link
+                    href="/portfolio"
+                    className="inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-md hover:bg-surface transition-colors"
                   >
-                    Sign Out
+                    <span>Portfolio</span>
+                  </Link>
+                  <div className="inline-flex items-center gap-1.5 text-xs font-mono text-foreground px-3 py-1.5 rounded-md bg-surface border border-border">
+                    <User className="w-3.5 h-3.5 text-accent" />
+                    <span>{user?.name?.split(" ")[0] || "Trader"}</span>
+                    <span className="text-[10px] px-1 py-0.2 rounded bg-background border border-border/50 text-accent font-semibold">PRO</span>
+                  </div>
+                  <button
+                    onClick={logout}
+                    className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-bearish px-2.5 py-1.5 rounded-md hover:bg-surface transition-colors"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Logout</span>
                   </button>
-                </>
+                </div>
               )}
 
               {/* Mobile menu toggle */}
@@ -234,16 +225,24 @@ export default function Navbar() {
                 </Link>
               ))}
               <div className="pt-3 border-t border-border mt-3 space-y-2">
-                {!isAuthenticated ? (
+                {authLoading ? (
+                  <div className="w-full h-10 rounded-md bg-surface/50 animate-pulse" />
+                ) : !isAuthenticated ? (
                   <>
                     <button
-                      onClick={() => openAuth("signin")}
+                      onClick={() => {
+                        setMobileOpen(false);
+                        openAuth("signin");
+                      }}
                       className="w-full text-left px-3 py-2.5 text-sm text-muted-foreground"
                     >
                       Sign In
                     </button>
                     <button
-                      onClick={() => openAuth("signup")}
+                      onClick={() => {
+                        setMobileOpen(false);
+                        openAuth("signup");
+                      }}
                       className="w-full text-center px-3 py-2.5 text-sm font-medium bg-foreground text-background rounded-md"
                     >
                       Get Started
@@ -251,18 +250,39 @@ export default function Navbar() {
                   </>
                 ) : (
                   <>
+                    <div className="px-3 py-2 text-xs font-mono text-muted-foreground flex items-center justify-between">
+                      <span>Logged in as {user?.name || "Trader"}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface border border-border uppercase text-accent">PRO</span>
+                    </div>
+                    <Link
+                      href="/"
+                      onClick={() => setMobileOpen(false)}
+                      className="block w-full text-left px-3 py-2 text-sm text-foreground bg-surface rounded-md"
+                    >
+                      Dashboard & Markets
+                    </Link>
                     <Link
                       href="/watchlist"
                       onClick={() => setMobileOpen(false)}
-                      className="block w-full text-left px-3 py-2.5 text-sm text-muted-foreground"
+                      className="block w-full text-left px-3 py-2 text-sm text-foreground bg-surface rounded-md"
                     >
-                      My Terminal
+                      My Watchlist
+                    </Link>
+                    <Link
+                      href="/portfolio"
+                      onClick={() => setMobileOpen(false)}
+                      className="block w-full text-left px-3 py-2 text-sm text-foreground bg-surface rounded-md"
+                    >
+                      Portfolio Intelligence
                     </Link>
                     <button
-                      onClick={handleSignOut}
-                      className="w-full text-center px-3 py-2.5 text-sm font-medium bg-surface border border-border text-foreground rounded-md"
+                      onClick={() => {
+                        logout();
+                        setMobileOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2.5 text-sm text-bearish hover:bg-surface rounded-md flex items-center gap-1.5"
                     >
-                      Sign Out
+                      <LogOut className="w-4 h-4" /> Logout
                     </button>
                   </>
                 )}
@@ -275,114 +295,125 @@ export default function Navbar() {
       {/* Auth Modal */}
       <AuthModal
         isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
+        onClose={closeAuth}
         initialMode={authMode}
-        onAuthenticated={handleAuthenticated}
+        onAuthenticated={() => {
+          login();
+          closeAuth();
+        }}
       />
 
-      {/* Search Command Palette */}
+      {/* ⌘K Command Palette / Global Search Modal */}
       {searchOpen && (
-        <div className="fixed inset-0 z-[100]" role="dialog" aria-label="Search assets">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeSearch} />
-          <div className="relative max-w-xl mx-auto mt-[15vh] px-4">
-            <div className="bg-surface border border-border rounded-xl shadow-2xl overflow-hidden">
-              <div className="flex items-center gap-3 px-4 border-b border-border">
-                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                  placeholder="Search any US stock, Indian share, crypto, ETF (e.g. BTC, NVDA, RELIANCE, TSLA)..."
-                  className="flex-1 py-3.5 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                />
-                <kbd className="px-1.5 py-0.5 text-[10px] font-mono border border-border rounded text-muted-foreground">
-                  ESC
-                </kbd>
-              </div>
-
-              {/* Dynamic Search Results */}
-              {results.length > 0 && (
-                <ul className="max-h-80 overflow-y-auto py-2 scrollbar-thin">
-                  {results.map((asset, idx) => (
-                    <li key={asset.id || asset.symbol}>
-                      <Link
-                        href={`/assets/${asset.symbol}`}
-                        onClick={closeSearch}
-                        className={cn(
-                          "flex items-center justify-between px-4 py-2.5 text-sm transition-colors",
-                          idx === selectedIdx
-                            ? "bg-elevated text-foreground"
-                            : "text-muted-foreground hover:bg-elevated hover:text-foreground"
-                        )}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="font-mono font-semibold text-foreground shrink-0">
-                            {asset.symbol}
-                          </span>
-                          <span className="truncate">{asset.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-3">
-                          <span className="text-xs text-muted-foreground">
-                            {asset.exchange}
-                          </span>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
-                            {asset.asset_type}
-                          </span>
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-16 sm:pt-24 p-4">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={closeSearch} />
+          <div className="relative w-full max-w-2xl rounded-xl bg-surface border border-border shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95">
+            <div className="flex items-center px-4 border-b border-border">
+              <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search by ticker (e.g. BTC, RELIANCE, NVDA, TCS, ETH, TSLA)..."
+                className="w-full px-3 py-4 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              />
+              {query && (
+                <button
+                  onClick={() => {
+                    setQuery("");
+                    setResults([]);
+                  }}
+                  className="p-1 rounded text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               )}
+            </div>
 
-              {/* Empty state with auto fallback candidate */}
-              {query.length > 0 && results.length === 0 && (
-                <div className="p-4">
-                  <div className="text-center text-xs text-muted-foreground mb-3">
-                    Analyzing real-time ticker &ldquo;{query.toUpperCase()}&rdquo; across global exchanges
+            <div className="max-h-96 overflow-y-auto p-2">
+              {results.length > 0 ? (
+                <div className="space-y-1">
+                  <div className="px-3 py-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    Matching Global Assets ({results.length})
                   </div>
+                  {results.map((asset, idx) => (
+                    <Link
+                      key={asset.id || asset.symbol}
+                      href={`/assets/${asset.symbol}`}
+                      onClick={closeSearch}
+                      className={cn(
+                        "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors",
+                        selectedIdx === idx ? "bg-elevated text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-surface"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono font-bold text-foreground">{asset.symbol}</span>
+                        <span className="text-xs text-muted-foreground truncate max-w-[280px]">{asset.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
+                          {asset.exchange}
+                        </span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
+                          {asset.asset_type}
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : query.trim() ? (
+                <div className="p-6 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    No predefined asset found for &ldquo;<span className="text-foreground font-mono">{query}</span>&rdquo;.
+                  </p>
                   <Link
                     href={`/assets/${query.trim().toUpperCase()}`}
                     onClick={closeSearch}
-                    className="flex items-center justify-between p-3 rounded-lg bg-background border border-border hover:border-accent text-sm transition-all"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground text-background text-xs font-mono font-medium hover:bg-foreground/90 transition-colors"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-accent">{query.trim().toUpperCase()}</span>
-                      <span className="text-xs text-muted-foreground">Launch Live Terminal</span>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-accent" />
+                    Launch Live Terminal for &ldquo;{query.trim().toUpperCase()}&rdquo; <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
-              )}
-
-              {/* Quick Trending Suggestions when query is empty */}
-              {query.length === 0 && (
-                <div className="p-3">
-                  <div className="px-2 py-1 text-[11px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                    <TrendingUp className="w-3 h-3 text-accent" /> Popular Discovered Markets
+              ) : (
+                <div className="space-y-1">
+                  <div className="px-3 py-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    Popular Global Markets
                   </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {POPULAR_SEARCHES.map((asset) => (
-                      <Link
-                        key={asset.symbol}
-                        href={`/assets/${asset.symbol}`}
-                        onClick={closeSearch}
-                        className="flex items-center justify-between p-2.5 rounded-lg hover:bg-elevated text-xs transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-foreground">{asset.symbol}</span>
-                          <span className="text-[11px] text-muted-foreground truncate max-w-[90px]">{asset.name}</span>
-                        </div>
-                        <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-background border border-border text-muted-foreground">
-                          {asset.asset_type}
+                  {POPULAR_SEARCHES.map((item, idx) => (
+                    <Link
+                      key={item.symbol}
+                      href={`/assets/${item.symbol}`}
+                      onClick={closeSearch}
+                      className={cn(
+                        "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors",
+                        selectedIdx === idx ? "bg-elevated text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-surface"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono font-bold text-foreground">{item.symbol}</span>
+                        <span className="text-xs text-muted-foreground">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
+                          {item.exchange}
                         </span>
-                      </Link>
-                    ))}
-                  </div>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
+                          {item.asset_type}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
               )}
+            </div>
+
+            <div className="px-4 py-2.5 border-t border-border/50 bg-background/50 flex items-center justify-between text-[11px] font-mono text-muted-foreground">
+              <span>Navigate with <kbd className="px-1 py-0.5 bg-surface border border-border rounded text-[10px]">↑</kbd> <kbd className="px-1 py-0.5 bg-surface border border-border rounded text-[10px]">↓</kbd></span>
+              <span>Open terminal with <kbd className="px-1 py-0.5 bg-surface border border-border rounded text-[10px]">Enter</kbd></span>
+              <span>Close with <kbd className="px-1 py-0.5 bg-surface border border-border rounded text-[10px]">ESC</kbd></span>
             </div>
           </div>
         </div>

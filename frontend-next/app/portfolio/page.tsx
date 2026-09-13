@@ -1,14 +1,56 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { PieChart, TrendingUp, ShieldCheck, ArrowUpRight } from "lucide-react";
+import { fetchFeaturedAssets } from "@/lib/api";
 
 export default function PortfolioPage() {
-  const positions = [
-    { symbol: "BTC", name: "Bitcoin", allocation: "35%", value: "$54,210.66", profit: "+$12,450.00 (+29.8%)", status: "BULLISH" },
-    { symbol: "NVDA", name: "NVIDIA Corp", allocation: "25%", value: "$38,720.00", profit: "+$8,900.00 (+29.8%)", status: "BULLISH" },
-    { symbol: "RELIANCE.NS", name: "Reliance Industries", allocation: "20%", value: "$30,980.00", profit: "+$3,420.00 (+12.4%)", status: "BULLISH" },
-    { symbol: "ETH", name: "Ethereum", allocation: "20%", value: "$30,980.00", profit: "+$4,120.00 (+15.3%)", status: "BULLISH" },
-  ];
+  const [positions, setPositions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Simulated holdings units
+  const holdingsConfig: Record<string, { units: number; costBasis: number; alloc: string }> = {
+    BTC: { units: 0.7, costBasis: 68000, alloc: "35%" },
+    NVDA: { units: 175, costBasis: 185, alloc: "25%" },
+    RELIANCE: { units: 25, costBasis: 1200, alloc: "20%" },
+    ETH: { units: 12, costBasis: 2300, alloc: "20%" },
+  };
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    fetchFeaturedAssets().then((res) => {
+      if (active && res?.assets) {
+        const livePositions = Object.entries(holdingsConfig).map(([sym, cfg]) => {
+          const assetData = res.assets.find((a: any) => a.symbol === sym || a.symbol.startsWith(sym));
+          const currentPrice = assetData?.price && assetData.price > 0 ? assetData.price : cfg.costBasis;
+          const posVal = currentPrice * cfg.units;
+          const costVal = cfg.costBasis * cfg.units;
+          const pnl = posVal - costVal;
+          const pnlPct = (pnl / costVal) * 100;
+          const currSym = assetData?.currency_symbol || (sym.includes("RELIANCE") ? "₹" : "$");
+
+          return {
+            symbol: sym,
+            name: assetData?.name || sym,
+            allocation: cfg.alloc,
+            currentPrice,
+            value: `${currSym}${posVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            profit: `${pnl >= 0 ? "+" : ""}${currSym}${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pnl >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%)`,
+            isProfit: pnl >= 0,
+            status: assetData?.regime || "BULLISH",
+            currencySymbol: currSym,
+          };
+        });
+        setPositions(livePositions);
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
@@ -69,22 +111,40 @@ export default function PortfolioPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
-              {positions.map((p) => (
-                <tr key={p.symbol} className="hover:bg-elevated/40 transition-colors">
-                  <td className="p-4 font-medium text-foreground">
-                    <span className="font-bold">{p.symbol}</span>{" "}
-                    <span className="text-muted-foreground text-[11px]">({p.name})</span>
-                  </td>
-                  <td className="p-4 text-foreground font-semibold">{p.allocation}</td>
-                  <td className="p-4 text-foreground tabular-nums">{p.value}</td>
-                  <td className="p-4 text-bullish tabular-nums">{p.profit}</td>
-                  <td className="p-4 text-right">
-                    <span className="text-[11px] font-semibold text-bullish bg-bullish/10 px-2 py-0.5 rounded border border-bullish/20">
-                      {p.status}
-                    </span>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-muted-foreground font-mono animate-pulse">
+                    Calculating live portfolio allocations & risk profiles...
                   </td>
                 </tr>
-              ))}
+              ) : (
+                positions.map((p) => (
+                  <tr key={p.symbol} className="hover:bg-elevated/40 transition-colors">
+                    <td className="p-4 font-medium text-foreground">
+                      <Link href={`/assets/${p.symbol}`} className="hover:text-accent flex items-center gap-1.5">
+                        <span className="font-bold">{p.symbol}</span>{" "}
+                        <span className="text-muted-foreground text-[11px]">({p.name})</span>
+                      </Link>
+                    </td>
+                    <td className="p-4 text-foreground font-semibold">{p.allocation}</td>
+                    <td className="p-4 text-foreground tabular-nums">{p.value}</td>
+                    <td className={`p-4 tabular-nums ${p.isProfit ? "text-bullish" : "text-bearish"}`}>{p.profit}</td>
+                    <td className="p-4 text-right">
+                      <span
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${
+                          p.status === "BULLISH"
+                            ? "text-bullish bg-bullish/10 border-bullish/20"
+                            : p.status === "BEARISH"
+                            ? "text-bearish bg-bearish/10 border-bearish/20"
+                            : "text-warning bg-warning/10 border-warning/20"
+                        }`}
+                      >
+                        {p.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -3,17 +3,41 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Star, TrendingUp, TrendingDown, Trash2, Plus, ArrowUpRight } from "lucide-react";
-import { fetchWatchlist, removeFromWatchlist } from "@/lib/api";
+import { fetchFeaturedAssets, removeFromWatchlist } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 export default function WatchlistPage() {
-  const [watchlist, setWatchlist] = useState<any[]>([
-    { symbol: "BTC", name: "Bitcoin", price: 108421.32, changePct: 2.31, regime: "BULLISH", signal: "BUY", risk: "MEDIUM", currency: "USD" },
-    { symbol: "NVDA", name: "NVIDIA Corp", price: 128.50, changePct: 1.85, regime: "BULLISH", signal: "BUY", risk: "LOW", currency: "USD" },
-    { symbol: "RELIANCE.NS", name: "Reliance Industries", price: 2980.40, changePct: 0.82, regime: "BULLISH", signal: "BUY", risk: "LOW", currency: "INR" },
-    { symbol: "ETH", name: "Ethereum", price: 3450.80, changePct: 2.65, regime: "BULLISH", signal: "BUY", risk: "MEDIUM", currency: "USD" },
-    { symbol: "TSLA", name: "Tesla Inc", price: 220.10, changePct: -1.24, regime: "SIDEWAYS", signal: "HOLD", risk: "HIGH", currency: "USD" },
-  ]);
+  const [watchlist, setWatchlist] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    fetchFeaturedAssets().then((res) => {
+      if (active) {
+        if (res?.assets && res.assets.length > 0) {
+          setWatchlist(
+            res.assets.map((a: any) => ({
+              symbol: a.symbol,
+              name: a.name,
+              price: a.price,
+              changePct: a.change_pct,
+              regime: a.regime,
+              signal: a.signal,
+              risk: a.risk_level,
+              currency: a.currency,
+              currency_symbol: a.currency_symbol || (a.currency === "INR" ? "₹" : "$"),
+              data_status: a.data_status,
+            }))
+          );
+        }
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleRemove = (symbol: string) => {
     setWatchlist((prev) => prev.filter((item) => item.symbol !== symbol));
@@ -62,49 +86,69 @@ export default function WatchlistPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
-              {watchlist.map((item) => (
-                <tr key={item.symbol} className="hover:bg-elevated/40 transition-colors">
-                  <td className="p-4 font-medium text-foreground">
-                    <Link href={`/assets/${item.symbol}`} className="hover:text-accent flex items-center gap-1.5">
-                      <span className="font-bold">{item.symbol}</span>
-                      <span className="text-muted-foreground text-[11px]">({item.name})</span>
-                    </Link>
-                  </td>
-                  <td className="p-4 text-foreground font-semibold tabular-nums">
-                    {formatCurrency(item.price, item.currency)}
-                  </td>
-                  <td className="p-4 tabular-nums">
-                    <span className={`inline-flex items-center gap-1 ${item.changePct >= 0 ? "text-bullish" : "text-bearish"}`}>
-                      {item.changePct >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                      {item.changePct >= 0 ? "+" : ""}{item.changePct}%
-                    </span>
-                  </td>
-                  <td className="p-4 text-foreground">{item.regime}</td>
-                  <td className="p-4">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                        item.signal === "BUY"
-                          ? "bg-bullish/10 text-bullish border-bullish/20"
-                          : item.signal === "SELL"
-                          ? "bg-bearish/10 text-bearish border-bearish/20"
-                          : "bg-background text-muted-foreground border-border"
-                      }`}
-                    >
-                      {item.signal}
-                    </span>
-                  </td>
-                  <td className="p-4 text-muted-foreground">{item.risk}</td>
-                  <td className="p-4 text-right">
-                    <button
-                      onClick={() => handleRemove(item.symbol)}
-                      className="p-1 text-muted-foreground hover:text-bearish transition-colors"
-                      title="Remove from watchlist"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground font-mono animate-pulse">
+                    Connecting to live institutional feeds...
                   </td>
                 </tr>
-              ))}
+              ) : watchlist.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground font-mono">
+                    No assets currently in watchlist.
+                  </td>
+                </tr>
+              ) : (
+                watchlist.map((item) => (
+                  <tr key={item.symbol} className="hover:bg-elevated/40 transition-colors">
+                    <td className="p-4 font-medium text-foreground">
+                      <Link href={`/assets/${item.symbol}`} className="hover:text-accent flex items-center gap-1.5">
+                        <span className="font-bold">{item.symbol}</span>
+                        <span className="text-muted-foreground text-[11px]">({item.name})</span>
+                      </Link>
+                    </td>
+                    <td className="p-4 text-foreground font-semibold tabular-nums">
+                      {item.price !== null && item.price > 0
+                        ? `${item.currency_symbol || "$"}${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        : "Price unavailable"}
+                    </td>
+                    <td className="p-4 tabular-nums">
+                      {item.changePct !== undefined && !isNaN(item.changePct) ? (
+                        <span className={`inline-flex items-center gap-1 ${item.changePct >= 0 ? "text-bullish" : "text-bearish"}`}>
+                          {item.changePct >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                          {item.changePct >= 0 ? "+" : ""}{item.changePct.toFixed(2)}%
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-foreground">{item.regime}</td>
+                    <td className="p-4">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                          item.signal === "BUY"
+                            ? "bg-bullish/10 text-bullish border-bullish/20"
+                            : item.signal === "SELL"
+                            ? "bg-bearish/10 text-bearish border-bearish/20"
+                            : "bg-background text-muted-foreground border-border"
+                        }`}
+                      >
+                        {item.signal}
+                      </span>
+                    </td>
+                    <td className="p-4 text-muted-foreground">{item.risk}</td>
+                    <td className="p-4 text-right">
+                      <button
+                        onClick={() => handleRemove(item.symbol)}
+                        className="p-1 text-muted-foreground hover:text-bearish transition-colors"
+                        title="Remove from watchlist"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

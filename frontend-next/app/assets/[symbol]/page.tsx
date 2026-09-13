@@ -64,8 +64,8 @@ export default function AssetTerminalPage() {
     marketData?.asset_info?.exchange === "NSE" ||
     marketData?.asset_info?.exchange === "BSE";
 
-  const currencySymbol = isIndian ? "Rs" : "$";
-  const marketCurrency = getCurrencyCode(isIndian ? "INR" : "USD");
+  const currencySymbol = isIndian ? "₹" : "$";
+  const marketCurrency = isIndian ? "INR" : "USD";
 
   const candleList = marketData?.data || [];
   const latestCandle = candleList.length > 0 ? candleList[candleList.length - 1] : null;
@@ -79,10 +79,24 @@ export default function AssetTerminalPage() {
     if (typeof latestCandle?.close === "number" && latestCandle.close > 0) {
       return latestCandle.close;
     }
-    return 0;
+    return null;
   })();
 
-  const dataStatus = wsMarket?.market_status || wsMarket?.data_status || marketData?.data_status || "UNAVAILABLE";
+  // Compute market status label strictly adhering to real feed conditions
+  const dataStatus: "Live" | "Delayed" | "Market Closed" | "Reconnecting" | "Unavailable" = (() => {
+    if (connectionState === "RECONNECTING") return "Reconnecting";
+    if (loading) return "Unavailable";
+    const statusRaw = (wsMarket?.market_status || wsMarket?.data_status || marketData?.data_status || "").toUpperCase();
+    if (statusRaw === "MARKET_CLOSED" || statusRaw === "CLOSED") return "Market Closed";
+    if (statusRaw === "DELAYED") return "Delayed";
+    if (connectionState === "CONNECTED" && isMatchingWs && typeof wsMarket?.price === "number" && wsMarket.price > 0 && wsMarket?.data_status === "LIVE") {
+      return "Live";
+    }
+    if (price && price > 0) {
+      return statusRaw === "LIVE" ? "Live" : "Delayed";
+    }
+    return "Unavailable";
+  })();
   const signal = wsPrediction?.signal || signalData?.analysis?.signal || "BUY";
   const confidence = wsPrediction?.confidence || (signalData?.analysis?.confidence ? Math.round(signalData.analysis.confidence * 100) : 82);
   const regime = wsPrediction?.regime || signalData?.analysis?.regime || "BULLISH";
@@ -93,8 +107,8 @@ export default function AssetTerminalPage() {
   let computedMomentum = "Positive Momentum";
   let computedVolatility = "Moderate (18.4%)";
   let computedVolume = "Above 20-day Average (+14%)";
-  let supportPrice = Math.round(price * 0.945 * 100) / 100;
-  let resistancePrice = Math.round(price * 1.055 * 100) / 100;
+  let supportPrice = price && price > 0 ? Math.round(price * 0.945 * 100) / 100 : 0;
+  let resistancePrice = price && price > 0 ? Math.round(price * 1.055 * 100) / 100 : 0;
   let rsiValue = 56.4;
 
   if (latestCandle) {
@@ -117,8 +131,8 @@ export default function AssetTerminalPage() {
     }
   }
 
-  const bullishTrigger = Math.round(resistancePrice * 1.012 * 100) / 100;
-  const bearishTrigger = Math.round(supportPrice * 0.988 * 100) / 100;
+  const bullishTrigger = resistancePrice > 0 ? Math.round(resistancePrice * 1.012 * 100) / 100 : 0;
+  const bearishTrigger = supportPrice > 0 ? Math.round(supportPrice * 0.988 * 100) / 100 : 0;
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -155,12 +169,32 @@ export default function AssetTerminalPage() {
               Current Live Price
             </span>
             <span className="text-2xl sm:text-3xl font-mono font-semibold text-foreground tabular-nums tracking-tight">
-              {marketCurrency === "INR" ? `Rs ${typeof price === "number" ? price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : price}` : `$${typeof price === "number" ? price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : price}`}
+              {loading ? (
+                <span className="text-sm font-normal text-muted-foreground animate-pulse">Loading price…</span>
+              ) : price !== null && price > 0 ? (
+                marketCurrency === "INR"
+                  ? `₹${price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : `$${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              ) : (
+                <span className="text-sm font-normal text-muted-foreground">Price unavailable</span>
+              )}
             </span>
           </div>
 
           <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-background border border-border text-xs font-mono">
-            <span className="w-2 h-2 rounded-full bg-bullish animate-pulse" />
+            <span
+              className={`w-2 h-2 rounded-full ${
+                dataStatus === "Live"
+                  ? "bg-bullish animate-pulse"
+                  : dataStatus === "Market Closed"
+                  ? "bg-muted-foreground"
+                  : dataStatus === "Reconnecting"
+                  ? "bg-warning animate-ping"
+                  : dataStatus === "Delayed"
+                  ? "bg-warning"
+                  : "bg-bearish"
+              }`}
+            />
             <span className="text-foreground">{dataStatus}</span>
           </div>
         </div>

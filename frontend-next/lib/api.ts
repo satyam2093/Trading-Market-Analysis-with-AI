@@ -64,6 +64,14 @@ export function fetchMarketOverview() {
   return apiFetch<MarketOverviewResponse>("/api/v1/market/overview");
 }
 
+export function fetchFeaturedAssets() {
+  return apiFetch<{ timestamp: string; assets: any[] }>("/api/v1/market/featured");
+}
+
+export function fetchHealth() {
+  return apiFetch<{ status: string; timestamp: string; database: string; market_data_service: string; websocket_gateway: string }>("/api/v1/health");
+}
+
 export function fetchMarketData(symbol: string, timeframe = "1d", limit = 100) {
   return apiFetch<MarketDataResponse>(
     `/api/v1/market-data/${symbol}?timeframe=${timeframe}&limit=${limit}`

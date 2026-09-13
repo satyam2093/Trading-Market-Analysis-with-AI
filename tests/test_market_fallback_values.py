@@ -5,9 +5,9 @@ def test_market_live_quote_falls_back_to_catalog_price():
     service = MarketDataService()
 
     btc_quote = service.fetch_live_quote("BTC")
-    assert btc_quote["price"] > 0
-    assert btc_quote["data_status"] in {"LIVE", "UNAVAILABLE"}
+    assert btc_quote["price"] is not None and btc_quote["price"] > 0
+    assert btc_quote["data_status"] in {"LIVE", "DELAYED", "UNAVAILABLE"}
 
     btc_data = service.fetch_processed_market_data("BTC", timeframe="1d", limit=20)
-    assert btc_data["data_status"] in {"LIVE", "UNAVAILABLE"}
+    assert btc_data["data_status"] in {"LIVE", "DELAYED", "UNAVAILABLE"}
     assert "df" in btc_data

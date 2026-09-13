@@ -25,20 +25,16 @@ export default function CandlestickChart({ symbol, data = [] }: ChartProps) {
   const [timeframe, setTimeframe] = useState("1D");
   const [showEMA, setShowEMA] = useState(true);
 
-  // Fallback data points for clean rendering if data loading
-  const chartData = data.length > 0 ? data : Array.from({ length: 30 }).map((_, i) => {
-    const base = 100000 + i * 200 + Math.sin(i) * 500;
-    return {
-      timestamp: `Day ${i + 1}`,
-      open: base - 100,
-      high: base + 400,
-      low: base - 300,
-      close: base + 200,
-      volume: 15000 + Math.random() * 5000,
-      ema_20: base + 50,
-      ema_50: base - 100,
-    };
-  });
+  if (!data || data.length === 0) {
+    return (
+      <div className="glass-panel rounded-2xl p-6 flex flex-col items-center justify-center min-h-[350px] text-muted-foreground font-mono text-sm">
+        <BarChart2 className="w-8 h-8 mb-2 animate-pulse text-muted-foreground/50" />
+        <span>Loading price chart data for {symbol}...</span>
+      </div>
+    );
+  }
+
+  const chartData = data;
 
   return (
     <div className="glass-panel rounded-2xl p-6">

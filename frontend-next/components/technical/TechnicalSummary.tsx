@@ -7,12 +7,12 @@ interface TechnicalSummaryProps {
   momentum?: string;
   volatility?: string;
   volume?: string;
-  support?: number;
-  resistance?: number;
-  bullishTrigger?: number;
-  bearishTrigger?: number;
+  support?: number | null;
+  resistance?: number | null;
+  bullishTrigger?: number | null;
+  bearishTrigger?: number | null;
   rsi?: number;
-  currentPrice?: number;
+  currentPrice?: number | null;
   currencySymbol?: string;
 }
 
@@ -29,14 +29,14 @@ export default function TechnicalSummary({
   currentPrice = 100,
   currencySymbol = "$",
 }: TechnicalSummaryProps) {
-  // Calculate calibrated support and resistance if not explicitly provided
-  const realSupport = support && support > 0 ? support : Math.round(currentPrice * 0.945 * 100) / 100;
-  const realResistance = resistance && resistance > 0 ? resistance : Math.round(currentPrice * 1.055 * 100) / 100;
-  const realBullishTrigger = bullishTrigger && bullishTrigger > 0 ? bullishTrigger : Math.round(realResistance * 1.012 * 100) / 100;
-  const realBearishTrigger = bearishTrigger && bearishTrigger > 0 ? bearishTrigger : Math.round(realSupport * 0.988 * 100) / 100;
+  const validPrice = typeof currentPrice === "number" && currentPrice > 0 ? currentPrice : null;
+  const realSupport = support && support > 0 ? support : (validPrice ? Math.round(validPrice * 0.945 * 100) / 100 : null);
+  const realResistance = resistance && resistance > 0 ? resistance : (validPrice ? Math.round(validPrice * 1.055 * 100) / 100 : null);
+  const realBullishTrigger = bullishTrigger && bullishTrigger > 0 ? bullishTrigger : (realResistance ? Math.round(realResistance * 1.012 * 100) / 100 : null);
+  const realBearishTrigger = bearishTrigger && bearishTrigger > 0 ? bearishTrigger : (realSupport ? Math.round(realSupport * 0.988 * 100) / 100 : null);
 
-  const supportDist = (((realSupport - currentPrice) / (currentPrice || 1)) * 100).toFixed(1);
-  const resistanceDist = (((realResistance - currentPrice) / (currentPrice || 1)) * 100).toFixed(1);
+  const supportDist = validPrice && realSupport ? (((realSupport - validPrice) / validPrice) * 100).toFixed(1) : null;
+  const resistanceDist = validPrice && realResistance ? (((realResistance - validPrice) / validPrice) * 100).toFixed(1) : null;
 
   return (
     <div className="p-6 rounded-xl bg-surface border border-border space-y-6">
@@ -88,14 +88,16 @@ export default function TechnicalSummary({
             <span className="text-bullish font-bold flex items-center gap-1.5 uppercase text-[11px]">
               <ShieldCheck className="w-4 h-4 text-bullish" /> Key Bullish Support Zone
             </span>
-            <span className="text-muted-foreground text-[10px]">{supportDist}% away</span>
+            <span className="text-muted-foreground text-[10px]">{supportDist ? `${supportDist}% away` : "Calculating..."}</span>
           </div>
           <div className="text-xl font-bold font-mono text-bullish tabular-nums">
-            {currencySymbol}{realSupport.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            {realSupport !== null ? `${currencySymbol}${realSupport.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "Calculating..."}
           </div>
           <div className="text-[11px] font-mono text-muted-foreground/80 flex items-center justify-between pt-1 border-t border-border/40">
             <span>Breakdown Invalidation:</span>
-            <span className="font-semibold text-bearish">{currencySymbol}{realBearishTrigger.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <span className="font-semibold text-bearish">
+              {realBearishTrigger !== null ? `${currencySymbol}${realBearishTrigger.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "N/A"}
+            </span>
           </div>
         </div>
 
@@ -105,14 +107,16 @@ export default function TechnicalSummary({
             <span className="text-bearish font-bold flex items-center gap-1.5 uppercase text-[11px]">
               <AlertOctagon className="w-4 h-4 text-bearish" /> Key Bearish Resistance Zone
             </span>
-            <span className="text-muted-foreground text-[10px]">+{resistanceDist}% away</span>
+            <span className="text-muted-foreground text-[10px]">{resistanceDist ? `+${resistanceDist}% away` : "Calculating..."}</span>
           </div>
           <div className="text-xl font-bold font-mono text-bearish tabular-nums">
-            {currencySymbol}{realResistance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            {realResistance !== null ? `${currencySymbol}${realResistance.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "Calculating..."}
           </div>
           <div className="text-[11px] font-mono text-muted-foreground/80 flex items-center justify-between pt-1 border-t border-border/40">
             <span>Bullish Breakout Confirmation:</span>
-            <span className="font-semibold text-bullish">{currencySymbol}{realBullishTrigger.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <span className="font-semibold text-bullish">
+              {realBullishTrigger !== null ? `${currencySymbol}${realBullishTrigger.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "N/A"}
+            </span>
           </div>
         </div>
       </div>

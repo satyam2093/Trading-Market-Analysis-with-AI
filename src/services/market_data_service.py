@@ -3,7 +3,7 @@ import datetime
 from typing import Dict, Any, Optional
 import pandas as pd
 
-from src.data.market_data import ASSET_PRICE_CATALOG, StockMarketDataProvider
+from src.data.market_data import StockMarketDataProvider
 from src.data.crypto_data import CryptoMarketDataProvider
 from src.preprocessing.validation import DataValidator
 from src.preprocessing.cleaning import DataCleaner
@@ -74,17 +74,20 @@ class MarketDataService:
         data_status = df_raw.attrs.get("data_status", "LIVE")
 
         if df_raw.empty or data_status == "UNAVAILABLE":
-            fallback_entry = self._get_catalog_fallback_quote(asset_id, asset_info)
-            fallback_price = float(fallback_entry["price"]) if fallback_entry else 100.0
-            fallback_symbol = provider_symbol or asset_info.get("symbol") or asset_id
-            df_raw = self.stock_provider._generate_calibrated_series(
-                fallback_symbol,
-                fallback_price,
-                limit=max(200, limit)
-            )
-            df_raw.attrs["data_status"] = "LIVE"
-            df_raw.attrs["source"] = "calibrated_feed"
-            data_status = "LIVE"
+            # Do NOT generate fake/calibrated data. Return empty with clear UNAVAILABLE status.
+            logger.warning(f"No real OHLCV data available for {asset_id}. Returning UNAVAILABLE status.")
+            result = {
+                "asset_info": asset_info,
+                "timeframe": timeframe,
+                "data_status": "UNAVAILABLE",
+                "df": pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"]),
+                "market_status": "UNAVAILABLE",
+                "last_updated": now.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "freshness_seconds": 0,
+                "source": "yfinance"
+            }
+            self._cache[cache_key] = {"cached_at": now, "data": result}
+            return result
 
         # Validate & Clean
         self.validator.validate_ohlcv(df_raw, asset_symbol=asset_id)
@@ -118,99 +121,122 @@ class MarketDataService:
         self._cache[cache_key] = {"cached_at": now, "data": result}
         return result
 
-    def _get_catalog_fallback_quote(self, asset_id: str, asset_info: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
-        """Looks up a known baseline asset price from the project catalog."""
-        if asset_info is None:
-            asset_info = {}
-
-        candidate_keys = []
-        normalized = str(asset_id or "").strip().upper()
-        if normalized:
-            candidate_keys.append(normalized)
-            if normalized.endswith("-USD"):
-                candidate_keys.append(normalized.replace("-USD", ""))
-
-        provider_symbol = str(asset_info.get("provider_symbol") or "").strip().upper()
-        if provider_symbol:
-            candidate_keys.append(provider_symbol)
-            if provider_symbol.endswith("-USD"):
-                candidate_keys.append(provider_symbol.replace("-USD", ""))
-            if "." in provider_symbol:
-                candidate_keys.append(provider_symbol.split(".")[0])
-
-        asset_symbol = str(asset_info.get("symbol") or "").strip().upper()
-        if asset_symbol:
-            candidate_keys.append(asset_symbol)
-
-        for key in candidate_keys:
-            entry = ASSET_PRICE_CATALOG.get(key)
-            if entry:
-                return entry
-        return None
-
     def fetch_live_quote(self, asset_id: str) -> Dict[str, Any]:
         """
         Fetches the latest real-time quote for an asset directly from the provider.
+        Never returns simulated or catalog fallback prices.
         """
         now = datetime.datetime.now(datetime.timezone.utc)
         asset_info = self.discovery_service.get_asset_by_id(asset_id)
         if not asset_info:
+            is_crypto = "-USD" in asset_id or asset_id.upper() in ["BTC", "ETH", "SOL", "DOGE", "XRP", "ADA", "BNB"]
+            is_indian = ".NS" in asset_id or ".BO" in asset_id or asset_id.upper() in ["RELIANCE", "TCS", "INFY", "HDFCBANK", "TATAMOTORS", "SBIN", "BHARTIARTL", "ITC", "WIPRO", "BAJFINANCE"]
             asset_info = {
                 "id": asset_id,
                 "symbol": asset_id,
                 "name": asset_id,
-                "asset_type": "CRYPTO" if "-USD" in asset_id or asset_id in ["BTC", "ETH", "SOL"] else "STOCK",
-                "exchange": "NASDAQ",
-                "currency": "USD",
-                "provider_symbol": asset_id
+                "asset_type": "CRYPTO" if is_crypto else "STOCK",
+                "exchange": "BINANCE" if is_crypto else ("NSE" if is_indian else "NASDAQ"),
+                "currency": "INR" if is_indian else "USD",
+                "provider_symbol": f"{asset_id}-USD" if is_crypto and not asset_id.endswith("-USD") else (f"{asset_id}.NS" if is_indian and not asset_id.endswith(".NS") else asset_id)
             }
 
         provider_sym = asset_info.get("provider_symbol") or asset_info["symbol"]
+        tickers_to_try = [provider_sym]
+        if not provider_sym.endswith(".NS") and not provider_sym.endswith("-USD"):
+            tickers_to_try.append(f"{provider_sym}.NS")
+            tickers_to_try.append(f"{provider_sym}-USD")
 
-        try:
-            import yfinance as yf
-            ticker = yf.Ticker(provider_sym)
-            fast_info = ticker.fast_info
+        import yfinance as yf
 
-            if fast_info:
-                lookup = fast_info.get if hasattr(fast_info, "get") else lambda key, default=None: getattr(fast_info, key, default)
-                last_price = lookup("last_price") or lookup("regular_market_price")
-                if last_price and not pd.isna(last_price) and float(last_price) > 0:
-                    open_p = lookup("open") or lookup("regular_market_open") or last_price
-                    high_p = lookup("day_high") or lookup("regular_market_day_high") or last_price
-                    low_p = lookup("day_low") or lookup("regular_market_day_low") or last_price
-                    vol = lookup("last_volume") or lookup("three_month_average_volume") or 0.0
+        for t_sym in tickers_to_try:
+            try:
+                ticker = yf.Ticker(t_sym)
+                fast_info = ticker.fast_info
+
+                if fast_info:
+                    lookup = fast_info.get if hasattr(fast_info, "get") else lambda key, default=None: getattr(fast_info, key, default)
+                    last_price = lookup("last_price") or lookup("regular_market_price")
+                    if last_price and not pd.isna(last_price) and float(last_price) > 0:
+                        last_p = float(last_price)
+                        prev_close = lookup("previous_close") or lookup("regular_market_previous_close")
+                        prev_p = float(prev_close) if prev_close and not pd.isna(prev_close) else last_p
+                        chg = last_p - prev_p
+                        chg_pct = (chg / prev_p * 100.0) if prev_p > 0 else 0.0
+
+                        open_p = lookup("open") or lookup("regular_market_open") or last_p
+                        high_p = lookup("day_high") or lookup("regular_market_day_high") or last_p
+                        low_p = lookup("day_low") or lookup("regular_market_day_low") or last_p
+                        vol = lookup("last_volume") or lookup("three_month_average_volume") or 0.0
+
+                        currency = lookup("currency") or asset_info.get("currency", "USD")
+                        asset_info["currency"] = currency
+                        asset_info["provider_symbol"] = t_sym
+
+                        return {
+                            "symbol": asset_id.upper(),
+                            "price": round(last_p, 2),
+                            "previous_close": round(prev_p, 2),
+                            "change": round(chg, 2),
+                            "change_percent": round(chg_pct, 2),
+                            "open": round(float(open_p), 2),
+                            "high": round(float(high_p), 2),
+                            "low": round(float(low_p), 2),
+                            "volume": float(vol),
+                            "currency": currency,
+                            "currency_symbol": "₹" if currency == "INR" else "$",
+                            "timestamp": now.isoformat(),
+                            "unix_time": int(now.timestamp()),
+                            "data_status": "LIVE",
+                            "asset_info": asset_info
+                        }
+
+                # Fallback to recent history for valid close
+                hist = ticker.history(period="5d", interval="1d")
+                if hist is not None and not hist.empty and len(hist) > 0:
+                    last_row = hist.iloc[-1]
+                    last_p = float(last_row["Close"])
+                    prev_p = float(hist.iloc[-2]["Close"]) if len(hist) > 1 else last_p
+                    chg = last_p - prev_p
+                    chg_pct = (chg / prev_p * 100.0) if prev_p > 0 else 0.0
+                    currency = asset_info.get("currency", "INR" if ".NS" in t_sym else "USD")
 
                     return {
                         "symbol": asset_id.upper(),
-                        "price": round(float(last_price), 2),
-                        "open": round(float(open_p), 2),
-                        "high": round(float(high_p), 2),
-                        "low": round(float(low_p), 2),
-                        "volume": float(vol),
+                        "price": round(last_p, 2),
+                        "previous_close": round(prev_p, 2),
+                        "change": round(chg, 2),
+                        "change_percent": round(chg_pct, 2),
+                        "open": round(float(last_row["Open"]), 2),
+                        "high": round(float(last_row["High"]), 2),
+                        "low": round(float(last_row["Low"]), 2),
+                        "volume": float(last_row["Volume"]),
+                        "currency": currency,
+                        "currency_symbol": "₹" if currency == "INR" else "$",
                         "timestamp": now.isoformat(),
                         "unix_time": int(now.timestamp()),
-                        "data_status": "LIVE",
+                        "data_status": "DELAYED",
                         "asset_info": asset_info
                     }
-        except Exception as e:
-            logger.debug(f"Fast info lookup failed for {asset_id}: {e}")
+            except Exception as e:
+                logger.debug(f"Live quote lookup error for {t_sym}: {e}")
 
-        catalog_quote = self._get_catalog_fallback_quote(asset_id, asset_info)
-        fallback_price = float(catalog_quote["price"]) if catalog_quote else 1.0
-        fallback_open = fallback_price * 0.995
-        fallback_high = fallback_price * 1.01
-        fallback_low = fallback_price * 0.985
-
+        # Real provider could not provide price - return explicit UNAVAILABLE, never fake/catalog prices
+        logger.warning(f"Market data provider could not retrieve live quote for {asset_id}. Returning UNAVAILABLE.")
         return {
             "symbol": asset_id.upper(),
-            "price": round(fallback_price, 2),
-            "open": round(fallback_open, 2),
-            "high": round(fallback_high, 2),
-            "low": round(fallback_low, 2),
-            "volume": 1000000.0,
+            "price": None,
+            "previous_close": None,
+            "change": None,
+            "change_percent": None,
+            "open": None,
+            "high": None,
+            "low": None,
+            "volume": None,
+            "currency": asset_info.get("currency", "USD"),
+            "currency_symbol": "₹" if asset_info.get("currency") == "INR" else "$",
             "timestamp": now.isoformat(),
             "unix_time": int(now.timestamp()),
-            "data_status": "LIVE",
+            "data_status": "UNAVAILABLE",
             "asset_info": asset_info
         }

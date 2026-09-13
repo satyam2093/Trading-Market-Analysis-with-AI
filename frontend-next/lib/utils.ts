@@ -21,13 +21,12 @@ export function formatCurrency(
   const normalizedCurrency = getCurrencyCode(currency);
 
   if (normalizedCurrency === "INR") {
-    const formatted = new Intl.NumberFormat("en-IN", {
+    return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
-    return formatted.replace("₹", "Rs ");
   }
 
   return new Intl.NumberFormat(locale, {
