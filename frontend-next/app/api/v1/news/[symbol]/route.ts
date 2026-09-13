@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { resolveAssetMetadata } from "@/lib/serverMarketService";
 
 export const dynamic = "force-dynamic";
@@ -10,24 +10,12 @@ export async function GET(
   const symbol = params.symbol || "BTC";
   const meta = resolveAssetMetadata(symbol);
 
+  // No real news API is integrated yet — return empty articles honestly
   return NextResponse.json({
     symbol,
-    data_status: "LIVE",
-    articles: [
-      {
-        title: `${meta.name} exhibits positive quantitative accumulation across institutional order books`,
-        source: "Market Intelligence Terminal",
-        sentiment: "BULLISH",
-        score: 0.82,
-        published_at: new Date().toISOString(),
-      },
-      {
-        title: `Macro regulatory update and volatility distribution outlook for ${symbol}`,
-        source: "Global Macro Wire",
-        sentiment: "NEUTRAL",
-        score: 0.54,
-        published_at: new Date(Date.now() - 3600000).toISOString(),
-      },
-    ],
+    name: meta.name,
+    data_status: "UNAVAILABLE",
+    message: "News API integration is not yet configured. No articles available.",
+    articles: [],
   });
 }

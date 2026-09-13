@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Server-side market data and ensemble intelligence service.
  * Powers Next.js API routes on Vercel serverless runtime.
  */
@@ -101,34 +101,49 @@ export async function fetchLiveQuoteFromServer(symbol: string): Promise<MarketAs
   const providerSymbol = meta.providerSymbol;
   const nowIso = new Date().toISOString();
 
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(providerSymbol)}?interval=1d&range=5d`;
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
-      next: { revalidate: 10 },
-    });
+  // Try multiple Yahoo Finance endpoints — some are blocked on certain IPs
+  const endpoints = [
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(providerSymbol)}?interval=1d&range=5d`,
+    `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(providerSymbol)}?interval=1d&range=5d`,
+  ];
 
-    if (res.ok) {
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "application/json",
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!res.ok) {
+        console.warn(`Yahoo Finance returned ${res.status} for ${providerSymbol} from ${url}`);
+        continue;
+      }
+
       const data = await res.json();
       const chartResult = data?.chart?.result?.[0];
-      if (chartResult) {
-        const yMeta = chartResult.meta;
-        const quotes = chartResult.indicators?.quote?.[0];
-        const closes: (number | null)[] = quotes?.close || [];
-        const validCloses = closes.filter((c): c is number => typeof c === "number" && !isNaN(c) && c > 0);
+      if (!chartResult) continue;
 
-        const lastPrice = yMeta.regularMarketPrice || (validCloses.length > 0 ? validCloses[validCloses.length - 1] : null);
-        const prevClose = yMeta.chartPreviousClose || (validCloses.length > 1 ? validCloses[validCloses.length - 2] : lastPrice);
-        const change = lastPrice && prevClose ? lastPrice - prevClose : 0;
-        const changePct = prevClose && prevClose > 0 && change ? (change / prevClose) * 100 : 0;
+      const yMeta = chartResult.meta;
+      const quotes = chartResult.indicators?.quote?.[0];
+      const closes: (number | null)[] = quotes?.close || [];
+      const validCloses = closes.filter((c): c is number => typeof c === "number" && !isNaN(c) && c > 0);
 
-        const currency = yMeta.currency || meta.currency;
-        const currencySymbol = currency === "INR" ? "₹" : "$";
+      const lastPrice = yMeta.regularMarketPrice || (validCloses.length > 0 ? validCloses[validCloses.length - 1] : null);
+      const prevClose = yMeta.chartPreviousClose || (validCloses.length > 1 ? validCloses[validCloses.length - 2] : lastPrice);
+      const change = lastPrice && prevClose ? lastPrice - prevClose : 0;
+      const changePct = prevClose && prevClose > 0 && change ? (change / prevClose) * 100 : 0;
 
+      const currency = yMeta.currency || meta.currency;
+      const currencySymbol = currency === "INR" ? "₹" : "$";
+
+      if (lastPrice && lastPrice > 0) {
         return {
           symbol: meta.symbol,
           name: meta.name,
-          price: lastPrice ? Math.round(lastPrice * 100) / 100 : null,
+          price: Math.round(lastPrice * 100) / 100,
           previous_close: prevClose ? Math.round(prevClose * 100) / 100 : null,
           change: change ? Math.round(change * 100) / 100 : 0,
           change_pct: changePct ? Math.round(changePct * 100) / 100 : 0,
@@ -140,11 +155,12 @@ export async function fetchLiveQuoteFromServer(symbol: string): Promise<MarketAs
           timestamp: nowIso,
         };
       }
+    } catch (err) {
+      console.error(`Error fetching quote for ${symbol} from endpoint:`, err instanceof Error ? err.message : err);
     }
-  } catch (err) {
-    console.error(`Error fetching live quote for ${symbol}:`, err);
   }
 
+  // All endpoints failed
   return {
     symbol: meta.symbol,
     name: meta.name,
@@ -163,16 +179,29 @@ export async function fetchOHLCVFromServer(symbol: string, limit = 100): Promise
   const providerSymbol = meta.providerSymbol;
 
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(providerSymbol)}?interval=1d&range=6mo`;
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
-      next: { revalidate: 30 },
-    });
+    const endpoints = [
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(providerSymbol)}?interval=1d&range=6mo`,
+      `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(providerSymbol)}?interval=1d&range=6mo`,
+    ];
 
-    if (res.ok) {
-      const json = await res.json();
-      const result = json?.chart?.result?.[0];
-      if (result) {
+    let result: any = null;
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) continue;
+        const json = await res.json();
+        result = json?.chart?.result?.[0];
+        if (result) break;
+      } catch { continue; }
+    }
+
+    if (result) {
         const timestamps: number[] = result.timestamp || [];
         const quote = result.indicators?.quote?.[0] || {};
         const opens = quote.open || [];
@@ -212,8 +241,29 @@ export async function fetchOHLCVFromServer(symbol: string, limit = 100): Promise
             const sum50 = records.slice(i - 49, i + 1).reduce((acc, r) => acc + r.close, 0);
             records[i].ema_50 = Math.round((sum50 / 50) * 100) / 100;
           }
-          records[i].rsi_14 = 55.4;
-          records[i].volatility_20 = 0.182;
+          if (i >= 14) {
+            let gains = 0;
+            let losses = 0;
+            for (let j = i - 13; j <= i; j++) {
+              const diff = records[j].close - records[j - 1].close;
+              if (diff > 0) gains += diff;
+              else losses -= diff;
+            }
+            const avgGain = gains / 14;
+            const avgLoss = losses / 14;
+            if (avgLoss === 0) {
+              records[i].rsi_14 = 100;
+            } else {
+              const rs = avgGain / avgLoss;
+              records[i].rsi_14 = Math.round((100 - (100 / (1 + rs))) * 100) / 100;
+            }
+          }
+          if (i >= 20) {
+            const slice20 = records.slice(i - 19, i + 1).map(r => r.close);
+            const mean = slice20.reduce((acc, v) => acc + v, 0) / 20;
+            const variance = slice20.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / 20;
+            records[i].volatility_20 = Math.round((Math.sqrt(variance) / mean) * 1000) / 1000;
+          }
         }
 
         const sliced = records.slice(-limit);
@@ -230,7 +280,6 @@ export async function fetchOHLCVFromServer(symbol: string, limit = 100): Promise
           data: sliced,
           data_status: "LIVE",
         };
-      }
     }
   } catch (e) {
     console.error(`Error fetching OHLCV for ${symbol}:`, e);

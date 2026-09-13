@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Newspaper, ExternalLink, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Newspaper, TrendingUp, TrendingDown, Minus, AlertCircle } from "lucide-react";
 import { fetchNews } from "@/lib/api";
 
 interface NewsArticle {
@@ -10,9 +10,11 @@ interface NewsArticle {
   source: string;
   published: string;
   url: string;
-  sentiment: "POSITIVE" | "NEGATIVE" | "NEUTRAL";
-  impact: "HIGH" | "MEDIUM" | "LOW";
+  sentiment: "POSITIVE" | "NEGATIVE" | "NEUTRAL" | "BULLISH" | "BEARISH";
+  impact?: "HIGH" | "MEDIUM" | "LOW";
   summary?: string;
+  score?: number;
+  published_at?: string;
 }
 
 export default function NewsPage() {
@@ -21,48 +23,43 @@ export default function NewsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchNews("BTC").then((res) => {
-      if (res?.articles) {
-        setNews(res.articles);
-      } else {
-        // Institutional fallback articles
-        setNews([
-          {
-            title: "US Federal Reserve Signals Interest Rate Trajectory in Semiannual Monetary Report",
-            source: "Financial Times",
-            published: "12m ago",
-            url: "#",
-            sentiment: "POSITIVE",
-            impact: "HIGH",
-            summary: "Federal Reserve chair emphasizes steady progress toward target inflation metrics, reducing tail-risk volatility.",
-          },
-          {
-            title: "Global Semiconductor Demand Surges as Hyperscale Infrastructure Expands",
-            source: "Reuters",
-            published: "45m ago",
-            url: "#",
-            sentiment: "POSITIVE",
-            impact: "HIGH",
-            summary: "Quarterly capital expenditures across leading cloud compute providers forecast continued growth.",
-          },
-          {
-            title: "Crude Oil Benchmark Stabilizes Near Support Following Supply Assessment",
-            source: "Bloomberg",
-            published: "2h ago",
-            url: "#",
-            sentiment: "NEUTRAL",
-            impact: "MEDIUM",
-            summary: "Energy markets reflect balanced production quotas and stable geopolitical shipping corridors.",
-          },
-        ]);
-      }
-      setLoading(false);
-    });
+    let mounted = true;
+    setLoading(true);
+    fetchNews("BTC")
+      .then((res) => {
+        if (mounted) {
+          if (res?.articles && Array.isArray(res.articles) && res.articles.length > 0) {
+            setNews(
+              res.articles.map((a: any) => ({
+                title: a.title || "Untitled",
+                source: a.source || "Market Intelligence",
+                published: a.published || a.published_at || "",
+                url: a.url || "#",
+                sentiment: normalizeSentiment(a.sentiment),
+                impact: a.impact || "MEDIUM",
+                summary: a.summary || "",
+                score: a.score,
+              }))
+            );
+          }
+          // No fake fallback — if no articles, leave array empty
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const filteredNews = news.filter((item) => {
     if (filter === "ALL") return true;
-    return item.sentiment === filter;
+    if (filter === "POSITIVE") return item.sentiment === "POSITIVE" || item.sentiment === "BULLISH";
+    if (filter === "NEGATIVE") return item.sentiment === "NEGATIVE" || item.sentiment === "BEARISH";
+    return item.sentiment === "NEUTRAL";
   });
 
   return (
@@ -79,7 +76,7 @@ export default function NewsPage() {
             Financial News & Sentiment
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            FinBERT-analyzed financial news feeds categorized by sentiment and market impact
+            News feeds analyzed for sentiment and market impact
           </p>
         </div>
 
@@ -101,51 +98,92 @@ export default function NewsPage() {
         </div>
       </div>
 
-      {/* News Feed Grid */}
+      {/* News Feed */}
       <div className="space-y-4">
-        {filteredNews.map((item, idx) => (
-          <div
-            key={idx}
-            className="p-6 rounded-xl bg-surface border border-border hover:border-muted-foreground/30 transition-all space-y-3"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1 max-w-3xl">
-                <h3 className="text-base font-semibold text-foreground leading-snug">
-                  {item.title}
-                </h3>
-                <div className="flex items-center gap-3 text-xs font-mono text-muted-foreground">
-                  <span className="font-semibold text-foreground">{item.source}</span>
-                  <span>•</span>
-                  <span>{item.published}</span>
+        {loading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="p-6 rounded-xl bg-surface border border-border space-y-3 animate-pulse">
+              <div className="h-5 w-3/4 bg-background rounded" />
+              <div className="h-3 w-1/3 bg-background rounded" />
+              <div className="h-3 w-1/2 bg-background rounded" />
+            </div>
+          ))
+        ) : filteredNews.length > 0 ? (
+          filteredNews.map((item, idx) => (
+            <div
+              key={idx}
+              className="p-6 rounded-xl bg-surface border border-border hover:border-muted-foreground/30 transition-all space-y-3"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1 max-w-3xl">
+                  <h3 className="text-base font-semibold text-foreground leading-snug">
+                    {item.title}
+                  </h3>
+                  <div className="flex items-center gap-3 text-xs font-mono text-muted-foreground">
+                    <span className="font-semibold text-foreground">{item.source}</span>
+                    {item.published && (
+                      <>
+                        <span>•</span>
+                        <span>{item.published}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className={`px-2.5 py-0.5 rounded text-xs font-mono font-semibold border ${
+                      item.sentiment === "POSITIVE" || item.sentiment === "BULLISH"
+                        ? "bg-bullish/10 text-bullish border-bullish/30"
+                        : item.sentiment === "NEGATIVE" || item.sentiment === "BEARISH"
+                        ? "bg-bearish/10 text-bearish border-bearish/30"
+                        : "bg-background text-muted-foreground border-border"
+                    }`}
+                  >
+                    {item.sentiment}
+                  </span>
+                  {item.impact && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-background border border-border text-muted-foreground">
+                      {item.impact} IMPACT
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <span
-                  className={`px-2.5 py-0.5 rounded text-xs font-mono font-semibold border ${
-                    item.sentiment === "POSITIVE"
-                      ? "bg-bullish/10 text-bullish border-bullish/30"
-                      : item.sentiment === "NEGATIVE"
-                      ? "bg-bearish/10 text-bearish border-bearish/30"
-                      : "bg-background text-muted-foreground border-border"
-                  }`}
-                >
-                  {item.sentiment}
-                </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-background border border-border text-muted-foreground">
-                  {item.impact} IMPACT
-                </span>
-              </div>
+              {item.summary && (
+                <p className="text-xs text-muted-foreground leading-relaxed pt-1">
+                  {item.summary}
+                </p>
+              )}
             </div>
-
-            {item.summary && (
-              <p className="text-xs text-muted-foreground leading-relaxed pt-1">
-                {item.summary}
+          ))
+        ) : (
+          <div className="p-12 rounded-xl bg-surface border border-border text-center space-y-4">
+            <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto" />
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">No news articles available</p>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                News sentiment analysis requires a live news API connection. Visit individual asset terminal pages 
+                for asset-specific market intelligence.
               </p>
-            )}
+            </div>
+            <Link
+              href="/discover"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-foreground text-background text-xs font-mono font-semibold hover:bg-foreground/90 transition-colors"
+            >
+              Explore Assets
+            </Link>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
+}
+
+function normalizeSentiment(raw: string | undefined): "POSITIVE" | "NEGATIVE" | "NEUTRAL" | "BULLISH" | "BEARISH" {
+  if (!raw) return "NEUTRAL";
+  const upper = raw.toUpperCase();
+  if (upper === "POSITIVE" || upper === "BULLISH") return "POSITIVE";
+  if (upper === "NEGATIVE" || upper === "BEARISH") return "NEGATIVE";
+  return "NEUTRAL";
 }

@@ -166,7 +166,7 @@ export default function HomePage() {
                 })
               ) : (
                 <div className="text-xs text-muted-foreground font-mono">
-                  Market indices connecting to gateway (Port 8000)...
+                  Market data temporarily unavailable
                 </div>
               )}
             </div>
@@ -279,8 +279,9 @@ export default function HomePage() {
               );
             })
           ) : (
-            <div className="col-span-full p-8 rounded-xl bg-surface border border-border text-center text-sm text-muted-foreground">
-              Connecting to live intelligence signals...
+            <div className="col-span-full p-8 rounded-xl bg-surface border border-border text-center text-sm text-muted-foreground space-y-2">
+              <p>Market signals temporarily unavailable.</p>
+              <p className="text-xs">Use the search or explore individual assets directly.</p>
             </div>
           )}
         </div>
