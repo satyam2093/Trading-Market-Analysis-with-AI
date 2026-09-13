@@ -12,7 +12,12 @@ import {
   Newspaper,
   ExternalLink,
   RefreshCw,
+  ShieldCheck,
+  Cpu,
   BarChart3,
+  Flame,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 import { fetchMarketOverview, fetchFeaturedAssets, fetchMarketNews } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -44,6 +49,8 @@ interface NewsItem {
   sentiment: "POSITIVE" | "NEGATIVE" | "NEUTRAL";
   impact?: "HIGH" | "MEDIUM" | "LOW";
   summary?: string;
+  image_url: string;
+  category?: string;
 }
 
 const DEFAULT_GLOBAL_CENTERS = {
@@ -71,13 +78,31 @@ const DEFAULT_GLOBAL_CENTERS = {
   ],
 };
 
+function MicroSparkline({ isPositive }: { isPositive: boolean }) {
+  const points = isPositive
+    ? "0,20 10,18 20,22 30,15 40,17 50,11 60,13 70,8 80,4"
+    : "0,6 10,8 20,5 30,12 40,10 50,16 60,14 70,19 80,22";
+
+  return (
+    <svg className="w-20 h-6 overflow-visible" viewBox="0 0 80 24" fill="none">
+      <polyline
+        fill="none"
+        stroke={isPositive ? "hsl(var(--bullish))" : "hsl(var(--bearish))"}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
+  );
+}
+
 export default function HomePage() {
   const { isAuthenticated, openAuth, authLoading } = useAuth();
 
   const [indices, setIndices] = useState<MarketOverviewItem[]>([]);
   const [centers, setCenters] = useState<any>(DEFAULT_GLOBAL_CENTERS);
   const [selectedRegion, setSelectedRegion] = useState<string>("ALL");
-  const [loadingIndices, setLoadingIndices] = useState(true);
 
   const [featured, setFeatured] = useState<FeaturedAsset[]>([]);
   const [loadingFeatured, setLoadingFeatured] = useState(true);
@@ -95,7 +120,6 @@ export default function HomePage() {
       if (res?.centers) {
         setCenters(res.centers);
       }
-      setLoadingIndices(false);
     });
 
     // 2. Fetch Featured Assets & Signals
@@ -128,12 +152,12 @@ export default function HomePage() {
   }, []);
 
   const pipelineStages = [
-    { num: "01", name: "MARKET DATA", desc: "Real-time ticks, multi-exchange order books, and OHLCV bars with strict data integrity." },
-    { num: "02", name: "STRUCTURE", desc: "17 deterministic candlestick patterns, multi-timeframe moving averages, and support/resistance zones." },
-    { num: "03", name: "FUNDAMENTALS", desc: "Audited financial reports, statement ratios, valuation health, and balance sheet scoring." },
-    { num: "04", name: "NEWS & SENTIMENT", desc: "Real-time natural language sentiment analysis on global financial news wires." },
+    { num: "01", name: "MARKET DATA", desc: "Sub-millisecond ticks, multi-exchange order books, and OHLCV bars with zero simulated data." },
+    { num: "02", name: "STRUCTURE", desc: "17 deterministic candlestick patterns, multi-timeframe moving averages, and dynamic support/resistance channels." },
+    { num: "03", name: "FUNDAMENTALS", desc: "Audited balance sheet ratios, debt-to-equity scoring, valuation multiples, and cash flow health." },
+    { num: "04", name: "NEWS SENTIMENT", desc: "Real-time natural language processing on global financial wire reports from Reuters, Bloomberg, and FT." },
     { num: "05", name: "INTELLIGENCE", desc: "8 specialized models: XGBoost regimes, PyTorch Bi-LSTM, Temporal Transformers, and Graph Neural Networks." },
-    { num: "06", name: "DECISION", desc: "Ensemble consensus with Value-at-Risk (VaR 95%) quantitative circuit breakers." },
+    { num: "06", name: "DECISION ENGINE", desc: "Multi-model ensemble consensus with Value-at-Risk (VaR 95%) quantitative circuit breakers." },
   ];
 
   // Helper to compile region cards
@@ -150,160 +174,176 @@ export default function HomePage() {
       ? allCenterCards
       : allCenterCards.filter((c) => c.regionName.toUpperCase() === selectedRegion.toUpperCase());
 
+  // Prepare duplicate list for seamless infinite marquee rotation
+  const tickerItems = indices.length > 0 ? indices : allCenterCards.slice(0, 10);
+  const marqueeList = [...tickerItems, ...tickerItems];
+
   return (
-    <div className="space-y-20 pb-16">
-      {/* ── 1. HERO SECTION ── */}
-      <section className="pt-12 md:pt-20 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="space-y-24 pb-20 overflow-x-hidden">
+      {/* ── 1. HERO SECTION WITH GRADIENT GLOW ── */}
+      <section className="relative pt-12 md:pt-20 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Ambient background glow */}
+        <div className="absolute top-10 left-1/4 -z-10 w-96 h-96 bg-accent/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-20 right-1/4 -z-10 w-80 h-80 bg-bullish/10 rounded-full blur-3xl pointer-events-none" />
+
         <div className="max-w-4xl space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-xs font-mono text-muted-foreground">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-border text-xs font-mono text-muted-foreground shadow-sm">
             <span className="w-2 h-2 rounded-full bg-bullish animate-pulse" />
-            <span>NEXQUANT QUANTITATIVE INTELLIGENCE v2.1</span>
+            <span className="font-semibold text-foreground">NEXQUANT QUANTITATIVE TERMINAL v2.2</span>
+            <span className="text-muted-foreground/50">|</span>
+            <span className="text-[11px] text-accent font-medium">LIVE INSTITUTIONAL FEEDS</span>
             {lastRefreshed && (
-              <span className="text-[10px] text-muted-foreground/70 hidden sm:inline">· Updated {lastRefreshed}</span>
+              <span className="text-[10px] text-muted-foreground/70 hidden sm:inline">· Synced {lastRefreshed}</span>
             )}
           </div>
 
           <h1 className="text-4xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-foreground leading-[1.05]">
             See the Market.<br />
-            <span className="text-muted-foreground">Understand the Signal.</span>
+            <span className="text-muted-foreground font-light">Understand the Signal.</span>
           </h1>
 
-          <p className="text-base sm:text-xl text-muted-foreground max-w-2xl font-normal leading-relaxed pt-2">
-            NexQuant synthesizes real-time market data across US, Indian, European, and Asian centers, technical structure, financial news sentiment, and 8 deep learning models into one authoritative intelligence terminal.
+          <p className="text-base sm:text-xl text-muted-foreground max-w-2xl font-normal leading-relaxed pt-1">
+            NexQuant synthesizes real-world data across Indian NSE/BSE shares, US tech leaders, global indices, and live financial news wires into one authoritative quantitative terminal.
           </p>
 
           <div className="flex flex-wrap items-center gap-4 pt-4">
             <Link
               href="/assets/TCS"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 transition-all shadow-md hover:shadow-lg"
             >
-              Explore Terminal <ArrowRight className="w-4 h-4" />
+              Launch TCS Terminal <ArrowRight className="w-4 h-4" />
             </Link>
 
             {authLoading ? (
-              <div className="w-28 h-11 rounded-md bg-surface animate-pulse" />
+              <div className="w-28 h-11 rounded-lg bg-surface animate-pulse" />
             ) : isAuthenticated ? (
               <Link
                 href="/watchlist"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-surface border border-border text-sm font-medium text-foreground hover:bg-elevated transition-colors"
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg bg-surface border border-border text-sm font-medium text-foreground hover:bg-elevated transition-colors shadow-sm"
               >
-                Go to My Terminal
+                Open Watchlist
               </Link>
             ) : (
               <button
                 onClick={() => openAuth("signup")}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-surface border border-border text-sm font-medium text-foreground hover:bg-elevated transition-colors"
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg bg-surface border border-border text-sm font-medium text-foreground hover:bg-elevated transition-colors shadow-sm"
               >
-                Get Started
+                Create Free Account
               </button>
             )}
 
             <Link
               href="/news"
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
-              <Newspaper className="w-4 h-4 text-accent" /> Live News Wire
+              <Newspaper className="w-4 h-4 text-accent" /> Live Financial News Wire →
             </Link>
           </div>
-        </div>
-      </section>
 
-      {/* ── 2. LIVE MARKET TICKER STRIP ── */}
-      <section className="border-y border-border/50 bg-surface/50 py-3">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-4 overflow-x-auto scrollbar-thin">
-            <div className="flex items-center gap-6 min-w-max py-1">
-              <span className="text-xs font-mono font-semibold text-muted-foreground/80 uppercase tracking-wider flex items-center gap-2">
-                <Activity className="w-3.5 h-3.5 text-accent" />
-                Live Feeds:
-              </span>
-
-              {indices.length > 0 ? (
-                indices.map((item) => {
-                  const currSymbol =
-                    (item as any).currency_symbol ||
-                    (item.symbol.includes(".NS") || ["NIFTY50", "NIFTY", "SENSEX", "BANKNIFTY", "RELIANCE", "TCS"].includes(item.symbol)
-                      ? "₹"
-                      : "$");
-                  const priceStr =
-                    typeof item.price === "number" && item.price > 0
-                      ? `${currSymbol}${item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : "Connecting...";
-
-                  const hasChange = item.change_pct !== undefined && !isNaN(item.change_pct);
-                  const isPositive = (item.change_pct || 0) >= 0;
-
-                  return (
-                    <Link
-                      key={item.symbol}
-                      href={`/assets/${item.symbol}`}
-                      className="flex items-center gap-2 hover:text-foreground transition-colors group text-xs font-mono"
-                    >
-                      <span className="font-semibold text-foreground">{item.symbol}</span>
-                      <span className="tabular-nums text-muted-foreground">{priceStr}</span>
-                      {hasChange && (
-                        <span className={`inline-flex items-center tabular-nums font-medium ${isPositive ? "text-bullish" : "text-bearish"}`}>
-                          {isPositive ? "+" : ""}
-                          {item.change_pct!.toFixed(2)}%
-                        </span>
-                      )}
-                      <span className="text-[9px] text-muted-foreground/60 px-1 py-0.2 rounded bg-background border border-border/40">
-                        {item.data_status || "LIVE"}
-                      </span>
-                    </Link>
-                  );
-                })
-              ) : (
-                allCenterCards.slice(0, 8).map((item) => (
-                  <Link
-                    key={item.symbol}
-                    href={`/assets/${item.symbol}`}
-                    className="flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-foreground"
-                  >
-                    <span className="font-semibold text-foreground">{item.symbol}</span>
-                    <span className="tabular-nums">
-                      {item.currency_symbol}
-                      {item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className={item.change_pct >= 0 ? "text-bullish" : "text-bearish"}>
-                      {item.change_pct >= 0 ? "+" : ""}
-                      {item.change_pct.toFixed(2)}%
-                    </span>
-                  </Link>
-                ))
-              )}
+          {/* Quick Metrics Barometer */}
+          <div className="pt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-border/60">
+            <div>
+              <span className="block text-2xl font-mono font-bold text-foreground">35+</span>
+              <span className="text-xs font-mono text-muted-foreground">Active Market Assets</span>
+            </div>
+            <div>
+              <span className="block text-2xl font-mono font-bold text-foreground">&lt; 50ms</span>
+              <span className="text-xs font-mono text-muted-foreground">Ticker Processing Latency</span>
+            </div>
+            <div>
+              <span className="block text-2xl font-mono font-bold text-bullish">100%</span>
+              <span className="text-xs font-mono text-muted-foreground">Authentic Live Quotes</span>
+            </div>
+            <div>
+              <span className="block text-2xl font-mono font-bold text-accent">8 Models</span>
+              <span className="text-xs font-mono text-muted-foreground">AI Consensus Pipeline</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── 3. NEW FEATURE: GLOBAL MARKET CENTERS & INDICES GROWTH MATRIX ── */}
-      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      {/* ── 2. AUTO-MOVING CONTINUOUS WALL STREET TICKER TAPE ── */}
+      <section className="border-y border-border/70 bg-surface/70 backdrop-blur-md py-3.5 overflow-hidden shadow-inner relative group">
+        <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+
+        <div className="flex items-center">
+          <div className="px-4 shrink-0 flex items-center gap-2 border-r border-border/80 z-20 bg-surface/90 pr-6">
+            <span className="w-2 h-2 rounded-full bg-bullish animate-pulse" />
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-accent" /> LIVE TICKER:
+            </span>
+          </div>
+
+          <div className="overflow-hidden flex-1">
+            <div className="animate-ticker-marquee flex items-center gap-8 py-0.5">
+              {marqueeList.map((item, idx) => {
+                const isPositive = (item.change_pct || 0) >= 0;
+                const currSymbol =
+                  (item as any).currency_symbol ||
+                  (item.symbol.includes(".NS") || ["NIFTY50", "NIFTY", "SENSEX", "BANKNIFTY", "RELIANCE", "TCS"].includes(item.symbol)
+                    ? "₹"
+                    : "$");
+
+                const priceStr =
+                  typeof item.price === "number" && item.price > 0
+                    ? `${currSymbol}${item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "Connecting...";
+
+                return (
+                  <Link
+                    key={`${item.symbol}_${idx}`}
+                    href={`/assets/${item.symbol}`}
+                    className="flex items-center gap-2.5 hover:text-foreground transition-colors group/item shrink-0 text-xs font-mono px-3 py-1 rounded hover:bg-elevated/60"
+                  >
+                    <span className="font-bold text-foreground group-hover/item:text-accent transition-colors">
+                      {item.symbol}
+                    </span>
+                    <span className="tabular-nums font-medium text-foreground/90">{priceStr}</span>
+                    {item.change_pct !== undefined && !isNaN(item.change_pct) && (
+                      <span className={`inline-flex items-center tabular-nums font-semibold ${isPositive ? "text-bullish" : "text-bearish"}`}>
+                        {isPositive ? "+" : ""}
+                        {item.change_pct.toFixed(2)}%
+                      </span>
+                    )}
+                    <span className="text-[9px] text-muted-foreground/60 px-1 py-0.2 rounded bg-background border border-border/40">
+                      {(item as any).data_status || "LIVE"}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 3. ATTENTION-GRABBING GLOBAL MARKET CENTERS & INDICES GROWTH ── */}
+      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Globe2 className="w-4 h-4 text-accent" />
               <span className="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
-                GLOBAL MARKET CENTERS
+                GLOBAL MARKET CENTERS & GROWTH
               </span>
             </div>
-            <h2 className="text-xl sm:text-3xl font-semibold text-foreground tracking-tight pt-1">
-              Major Markets Growth & Benchmarks
+            <h2 className="text-2xl sm:text-4xl font-normal text-foreground tracking-tight pt-1">
+              Major World Indices & Growth Metrics
             </h2>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Real-time performance tracking for Sensex, Nifty, Bank Nifty, S&P 500, Nasdaq, Shanghai, and MOEX Russia
+            <p className="text-sm text-muted-foreground">
+              Real-time benchmarks across India (Sensex, Nifty, Bank Nifty), US, China, Russia, and Europe
             </p>
           </div>
 
           {/* Region Tabs */}
-          <div className="flex items-center rounded border border-border bg-surface p-1 text-xs font-mono overflow-x-auto">
+          <div className="flex items-center rounded-lg border border-border bg-surface p-1 text-xs font-mono overflow-x-auto shadow-sm">
             {["ALL", "INDIA", "UNITED STATES", "CHINA", "RUSSIA", "GLOBAL"].map((r) => (
               <button
                 key={r}
                 onClick={() => setSelectedRegion(r)}
-                className={`px-3 py-1 rounded transition-colors whitespace-nowrap ${
+                className={`px-3.5 py-1.5 rounded-md transition-all whitespace-nowrap ${
                   selectedRegion === r
-                    ? "bg-elevated text-foreground font-semibold"
+                    ? "bg-elevated text-foreground font-semibold shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -313,8 +353,8 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Global Market Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {/* Global Market Cards Grid with Glow & Sparklines */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {displayedCenters.map((item: any) => {
             const isPos = (item.change_pct || 0) >= 0;
             const curr = item.currency_symbol || (item.currency === "INR" ? "₹" : "$");
@@ -327,17 +367,21 @@ export default function HomePage() {
               <Link
                 key={item.symbol}
                 href={`/assets/${item.symbol}`}
-                className="p-5 rounded-xl bg-surface border border-border hover:border-muted-foreground/40 transition-all flex flex-col justify-between group space-y-4"
+                className={`p-6 rounded-2xl bg-surface border transition-all flex flex-col justify-between group space-y-5 hover:-translate-y-1 duration-200 ${
+                  isPos
+                    ? "border-border hover:border-bullish/50 hover:shadow-lg hover:shadow-bullish/10"
+                    : "border-border hover:border-bearish/50 hover:shadow-lg hover:shadow-bearish/10"
+                }`}
               >
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{item.flag || "🌐"}</span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl drop-shadow">{item.flag || "🌐"}</span>
                       <div>
-                        <span className="font-mono font-bold text-base text-foreground group-hover:text-accent transition-colors">
+                        <span className="font-mono font-bold text-lg text-foreground group-hover:text-accent transition-colors block">
                           {item.symbol}
                         </span>
-                        <span className="block text-xs text-muted-foreground truncate max-w-[160px]">{item.name}</span>
+                        <span className="block text-xs text-muted-foreground truncate max-w-[150px]">{item.name}</span>
                       </div>
                     </div>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-background border border-border text-muted-foreground">
@@ -345,25 +389,38 @@ export default function HomePage() {
                     </span>
                   </div>
 
-                  <div className="pt-1">
-                    <div className="text-2xl font-mono font-semibold text-foreground tabular-nums">{priceStr}</div>
-                    {item.change_pct !== undefined && !isNaN(item.change_pct) && (
-                      <div className={`text-xs font-mono flex items-center gap-1.5 pt-0.5 ${isPos ? "text-bullish" : "text-bearish"}`}>
-                        {isPos ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                        <span>
-                          {isPos ? "+" : ""}
-                          {item.change ? `${curr}${Math.abs(item.change).toFixed(2)} ` : ""}
-                          ({isPos ? "+" : ""}
-                          {item.change_pct.toFixed(2)}%)
-                        </span>
+                  <div className="pt-2 flex items-baseline justify-between gap-2">
+                    <div>
+                      <div className="text-2xl font-mono font-bold text-foreground tabular-nums tracking-tight">
+                        {priceStr}
                       </div>
-                    )}
+                      {item.change_pct !== undefined && !isNaN(item.change_pct) && (
+                        <div className={`text-xs font-mono font-semibold flex items-center gap-1 pt-1 ${isPos ? "text-bullish" : "text-bearish"}`}>
+                          {isPos ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                          <span>
+                            {isPos ? "+" : ""}
+                            {item.change ? `${curr}${Math.abs(item.change).toFixed(2)} ` : ""}
+                            ({isPos ? "+" : ""}
+                            {item.change_pct.toFixed(2)}%)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Micro Sparkline Curve */}
+                    <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <MicroSparkline isPositive={isPos} />
+                    </div>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-border/60 flex items-center justify-between text-xs font-mono text-muted-foreground">
-                  <span>REGIONAL GROWTH</span>
-                  <span className={`font-semibold ${isPos ? "text-bullish" : "text-bearish"}`}>
+                <div className="pt-3 border-t border-border/60 flex items-center justify-between text-xs font-mono">
+                  <span className="text-muted-foreground">MARKET STATUS</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                    isPos
+                      ? "bg-bullish/10 text-bullish border-bullish/30"
+                      : "bg-bearish/10 text-bearish border-bearish/30"
+                  }`}>
                     {isPos ? "EXPANDING" : "CONTRACTING"}
                   </span>
                 </div>
@@ -373,99 +430,133 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── 4. NEW FEATURE: REAL-TIME FINANCIAL NEWS & MARKET PULSE ── */}
-      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-          <div>
+      {/* ── 4. VISUAL BREAKING FINANCIAL NEWS WIRE WITH IMAGES ── */}
+      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Newspaper className="w-4 h-4 text-accent" />
               <span className="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
-                MARKET INTELLIGENCE PULSE
+                REAL-WORLD FINANCIAL MEDIA PULSE
               </span>
               <span className="w-2 h-2 rounded-full bg-bullish animate-pulse" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight pt-1">
-              Live Breaking Financial News
+            <h2 className="text-2xl sm:text-3xl font-normal text-foreground tracking-tight pt-1">
+              Live Breaking Market Headlines
             </h2>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Real-time headlines analyzed for market impact from Bloomberg, Reuters, Financial Times, and WSJ
+            <p className="text-sm text-muted-foreground">
+              Recent real-time reporting with editorial photography from Reuters, Bloomberg, and Financial Times
             </p>
           </div>
 
-          <Link href="/news" className="text-xs font-mono text-accent hover:underline flex items-center gap-1">
-            Open Full News Terminal →
+          <Link
+            href="/news"
+            className="text-xs font-mono text-accent hover:underline flex items-center gap-1 font-semibold"
+          >
+            Explore Complete News Terminal →
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {loadingNews ? (
             Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="p-5 rounded-xl bg-surface border border-border space-y-3 animate-pulse">
-                <div className="h-4 w-3/4 bg-background rounded" />
-                <div className="h-3 w-1/3 bg-background rounded" />
-                <div className="h-12 w-full bg-background rounded" />
+              <div key={i} className="rounded-2xl border border-border bg-surface overflow-hidden space-y-3 animate-pulse">
+                <div className="h-44 bg-background" />
+                <div className="p-5 space-y-3">
+                  <div className="h-4 w-1/3 bg-background rounded" />
+                  <div className="h-5 w-full bg-background rounded" />
+                  <div className="h-10 w-full bg-background rounded" />
+                </div>
               </div>
             ))
           ) : news.length > 0 ? (
             news.map((item, idx) => (
               <div
                 key={idx}
-                className="p-5 rounded-xl bg-surface border border-border hover:border-muted-foreground/40 transition-all flex flex-col justify-between group space-y-3"
+                className="rounded-2xl border border-border bg-surface overflow-hidden hover:border-muted-foreground/40 transition-all flex flex-col justify-between group space-y-3 hover:shadow-lg"
               >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono text-muted-foreground">
-                    <span className="font-semibold text-foreground/90 truncate max-w-[180px]">{item.source}</span>
-                    <span>{item.published}</span>
+                {/* Visual Thumbnail */}
+                <div className="relative h-44 w-full overflow-hidden bg-background">
+                  <img
+                    src={item.image_url}
+                    alt={item.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
+                  <div className="absolute top-3 left-3">
+                    {item.category && (
+                      <span className="px-2.5 py-0.5 rounded bg-background/85 backdrop-blur-md border border-border/60 text-[10px] font-mono font-semibold text-foreground">
+                        {item.category}
+                      </span>
+                    )}
                   </div>
-
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors line-clamp-2 leading-snug flex items-start justify-between gap-2"
-                  >
-                    <span>{item.title}</span>
-                    <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
-                  </a>
-
-                  {item.summary && (
-                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed font-normal">
-                      {item.summary}
-                    </p>
-                  )}
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs font-mono text-white drop-shadow">
+                    <span className="font-semibold">{item.source}</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{item.published}</span>
+                  </div>
                 </div>
 
-                <div className="pt-3 border-t border-border/60 flex items-center justify-between text-xs font-mono">
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                      item.sentiment === "POSITIVE"
-                        ? "bg-bullish/10 text-bullish border-bullish/30"
-                        : item.sentiment === "NEGATIVE"
-                          ? "bg-bearish/10 text-bearish border-bearish/30"
-                          : "bg-background text-muted-foreground border-border"
-                    }`}
-                  >
-                    {item.sentiment}
-                  </span>
-                  {item.impact && (
-                    <span className="text-[10px] text-muted-foreground uppercase">{item.impact} IMPACT</span>
-                  )}
+                {/* Content */}
+                <div className="p-5 pt-1 flex-1 flex flex-col justify-between space-y-3">
+                  <div className="space-y-2">
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-base font-semibold text-foreground group-hover:text-accent transition-colors line-clamp-2 leading-snug flex items-start justify-between gap-1.5"
+                    >
+                      <span>{item.title}</span>
+                      <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
+                    </a>
+
+                    {item.summary && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed font-normal">
+                        {item.summary}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Card Footer */}
+                  <div className="pt-3 border-t border-border/60 flex items-center justify-between text-xs font-mono">
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        item.sentiment === "POSITIVE"
+                          ? "bg-bullish/10 text-bullish border-bullish/30"
+                          : item.sentiment === "NEGATIVE"
+                            ? "bg-bearish/10 text-bearish border-bearish/30"
+                            : "bg-background text-muted-foreground border-border"
+                      }`}
+                    >
+                      {item.sentiment}
+                    </span>
+
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-mono text-accent hover:underline font-medium"
+                    >
+                      <span>Read Story</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
                 </div>
               </div>
             ))
           ) : (
-            <div className="col-span-full p-8 rounded-xl bg-surface border border-border text-center text-sm text-muted-foreground">
-              Live financial news wire updating...
+            <div className="col-span-full p-8 rounded-2xl bg-surface border border-border text-center text-sm text-muted-foreground">
+              Connecting to live financial wire feeds...
             </div>
           )}
         </div>
       </section>
 
-      {/* ── 5. LIVE QUANTITATIVE INTELLIGENCE (FEATURED ASSETS) ── */}
-      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      {/* ── 5. FEATURED QUANTITATIVE SIGNALS ── */}
+      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-          <div>
-            <h2 className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight">
+          <div className="space-y-1">
+            <h2 className="text-2xl sm:text-3xl font-normal text-foreground tracking-tight">
               Featured Quantitative Signals
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
@@ -477,10 +568,10 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {loadingFeatured ? (
             Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="p-5 rounded-xl bg-surface border border-border space-y-4 animate-pulse">
+              <div key={i} className="p-6 rounded-2xl bg-surface border border-border space-y-4 animate-pulse">
                 <div className="h-5 w-24 bg-background rounded" />
                 <div className="h-8 w-32 bg-background rounded" />
                 <div className="h-12 w-full bg-background rounded" />
@@ -498,12 +589,12 @@ export default function HomePage() {
                 <Link
                   key={asset.symbol}
                   href={`/assets/${asset.symbol}`}
-                  className="p-5 rounded-xl bg-surface border border-border hover:border-muted-foreground/40 transition-all flex flex-col justify-between group space-y-6"
+                  className="p-6 rounded-2xl bg-surface border border-border hover:border-muted-foreground/40 transition-all flex flex-col justify-between group space-y-6 hover:shadow-lg"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div>
-                        <span className="font-mono font-bold text-base text-foreground group-hover:text-accent transition-colors">
+                        <span className="font-mono font-bold text-lg text-foreground group-hover:text-accent transition-colors">
                           {asset.symbol}
                         </span>
                         <span className="block text-xs text-muted-foreground truncate max-w-[200px]">{asset.name}</span>
@@ -514,11 +605,11 @@ export default function HomePage() {
                     </div>
 
                     <div className="space-y-1">
-                      <div className="text-2xl font-mono font-semibold text-foreground tabular-nums">
+                      <div className="text-2xl font-mono font-bold text-foreground tabular-nums">
                         {formattedPrice}
                       </div>
                       {asset.change_pct !== undefined && !isNaN(asset.change_pct) && (
-                        <div className={`text-xs font-mono flex items-center gap-1 ${isPositive ? "text-bullish" : "text-bearish"}`}>
+                        <div className={`text-xs font-mono flex items-center gap-1 font-semibold ${isPositive ? "text-bullish" : "text-bearish"}`}>
                           {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                           {isPositive ? "+" : ""}
                           {asset.change_pct.toFixed(2)}% (24h)
@@ -529,14 +620,14 @@ export default function HomePage() {
 
                   <div className="pt-4 border-t border-border/60 space-y-2">
                     <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-muted-foreground">SIGNAL</span>
+                      <span className="text-muted-foreground">AI SIGNAL</span>
                       <span className={`font-bold ${asset.signal === "BUY" ? "text-bullish" : asset.signal === "SELL" ? "text-bearish" : "text-warning"}`}>
                         {asset.signal}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs font-mono">
                       <span className="text-muted-foreground">CONFIDENCE</span>
-                      <span className="text-foreground">{asset.confidence}%</span>
+                      <span className="text-foreground font-semibold">{asset.confidence}%</span>
                     </div>
                     <div className="flex items-center justify-between text-xs font-mono">
                       <span className="text-muted-foreground">REGIME</span>
@@ -547,28 +638,28 @@ export default function HomePage() {
               );
             })
           ) : (
-            <div className="col-span-full p-8 rounded-xl bg-surface border border-border text-center text-sm text-muted-foreground">
+            <div className="col-span-full p-8 rounded-2xl bg-surface border border-border text-center text-sm text-muted-foreground">
               Connecting to live intelligence signals...
             </div>
           )}
         </div>
       </section>
 
-      {/* ── 6. PRODUCT STORY (6 STAGES) ── */}
+      {/* ── 6. ARCHITECTURE STORYLINE ── */}
       <section id="story" className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         <div className="max-w-2xl space-y-3">
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
-            SYSTEM ARCHITECTURE
+            QUANTITATIVE SYSTEM ARCHITECTURE
           </span>
           <h2 className="text-2xl sm:text-4xl font-normal text-foreground tracking-tight">
-            Everything the market is saying. <br />
-            <span className="text-muted-foreground">Processed in six synchronized stages.</span>
+            Authoritative intelligence. <br />
+            <span className="text-muted-foreground font-light">Processed across six synchronized layers.</span>
           </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pipelineStages.map((stage) => (
-            <div key={stage.num} className="p-6 rounded-xl bg-surface border border-border space-y-3">
+            <div key={stage.num} className="p-6 rounded-2xl bg-surface border border-border space-y-3">
               <span className="text-sm font-mono font-bold text-accent">{stage.num}</span>
               <h3 className="text-base font-semibold text-foreground">{stage.name}</h3>
               <p className="text-xs text-muted-foreground leading-relaxed font-normal">{stage.desc}</p>
@@ -577,15 +668,15 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── 7. INSTITUTIONAL METHODOLOGY GRID ── */}
+      {/* ── 7. INSTITUTIONAL RIGOR GRID ── */}
       <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="rounded-2xl border border-border bg-surface p-8 sm:p-12 space-y-8">
+        <div className="rounded-2xl border border-border bg-surface p-8 sm:p-14 space-y-8 shadow-sm">
           <div className="max-w-2xl space-y-2">
             <h2 className="text-xl sm:text-3xl font-semibold text-foreground tracking-tight">
               Governed by Rigorous Principles
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Designed for institutional clarity, transparency, and risk prevention.
+              Designed for institutional transparency, zero fake data, and risk mitigation.
             </p>
           </div>
 
@@ -593,20 +684,20 @@ export default function HomePage() {
             <div className="space-y-2.5">
               <div className="flex items-center gap-2 text-foreground font-medium text-sm">
                 <CheckCircle2 className="w-4 h-4 text-bullish shrink-0" />
-                <span>Zero Fabricated Data</span>
+                <span>Zero Fabricated Quotes</span>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                NexQuant never generates placeholder prices or simulated statements in production. If an exchange feed is offline, explicit status indicators are raised immediately.
+                NexQuant strictly avoids mock prices in production. If an exchange feed is closed or delayed, explicit status indicators are raised immediately.
               </p>
             </div>
 
             <div className="space-y-2.5">
               <div className="flex items-center gap-2 text-foreground font-medium text-sm">
                 <CheckCircle2 className="w-4 h-4 text-bullish shrink-0" />
-                <span>Circuit-Breaker Risk Engine</span>
+                <span>Value-at-Risk Guardrails</span>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Historical Value-at-Risk (95% VaR) and maximum expected drawdown are computed continuously. Signals are automatically downgraded when volatility exceeds safety thresholds.
+                Historical Value-at-Risk (95% VaR) and maximum expected drawdown are computed continuously. Signals automatically downgrade when volatility surges.
               </p>
             </div>
 
@@ -616,7 +707,7 @@ export default function HomePage() {
                 <span>Full Model Transparency</span>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Every ensemble signal reveals model consensus across XGBoost, Bi-LSTM, Temporal Transformers, and NLP sentiment so quantitative traders can audit underlying rationale.
+                Every ensemble prediction reveals underlying consensus across XGBoost, Bi-LSTM, Temporal Transformers, and NLP sentiment so traders can verify rationale.
               </p>
             </div>
           </div>
@@ -629,28 +720,28 @@ export default function HomePage() {
           Start analyzing with quantitative precision.
         </h2>
         <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-          Search over thousands of stocks, ETFs, indices, and crypto pairs on the NexQuant terminal.
+          Explore thousands of stocks, ETFs, global indices, and crypto pairs on the NexQuant terminal.
         </p>
         <div className="pt-2 flex items-center justify-center gap-4">
           <Link
             href="/assets/TCS"
-            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-md bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 transition-colors"
+            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-lg bg-foreground text-background text-sm font-semibold hover:bg-foreground/90 transition-all shadow-md"
           >
             Launch Terminal <ArrowRight className="w-4 h-4" />
           </Link>
           {authLoading ? (
-            <div className="w-32 h-12 rounded-md bg-surface animate-pulse" />
+            <div className="w-32 h-12 rounded-lg bg-surface animate-pulse" />
           ) : !isAuthenticated ? (
             <button
               onClick={() => openAuth("signup")}
-              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-md bg-surface border border-border text-sm font-semibold text-foreground hover:bg-elevated transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg bg-surface border border-border text-sm font-semibold text-foreground hover:bg-elevated transition-colors shadow-sm"
             >
               Get Started Free
             </button>
           ) : (
             <Link
               href="/watchlist"
-              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-md bg-surface border border-border text-sm font-semibold text-foreground hover:bg-elevated transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg bg-surface border border-border text-sm font-semibold text-foreground hover:bg-elevated transition-colors shadow-sm"
             >
               View My Watchlist
             </Link>

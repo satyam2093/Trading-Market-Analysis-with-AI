@@ -4,27 +4,48 @@
 
 @layer base {
   :root {
-    /* NexQuant Design System — Restrained Institutional Palette */
-    --background: 240 10% 3.9%;      /* #09090b zinc-950 */
-    --foreground: 0 0% 98%;           /* #fafafa zinc-50 */
-    --surface: 240 5.9% 10%;          /* #18181b zinc-900 */
-    --elevated: 240 3.7% 15.9%;       /* #27272a zinc-800 */
-    --border: 240 3.7% 15.9%;         /* #27272a zinc-800 */
+    /* NexQuant Design System — Institutional Dark (Default) */
+    --background: 240 10% 3.9%;       /* #09090b zinc-950 */
+    --foreground: 0 0% 98%;            /* #fafafa zinc-50 */
+    --surface: 240 5.9% 10%;           /* #18181b zinc-900 */
+    --elevated: 240 3.7% 15.9%;        /* #27272a zinc-800 */
+    --border: 240 3.7% 15.9%;          /* #27272a zinc-800 */
     --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%; /* #a1a1aa zinc-400 */
-    --accent: 217 91% 60%;            /* #3b82f6 blue-500 */
+    --muted-foreground: 240 5% 64.9%;  /* #a1a1aa zinc-400 */
+    --accent: 217 91% 60%;             /* #3b82f6 blue-500 */
     --accent-foreground: 0 0% 98%;
 
     /* Semantic — Market Signals */
     --bullish: 142 71% 45%;            /* #22c55e green-500 */
     --bearish: 0 84% 60%;              /* #ef4444 red-500 */
-    --warning: 38 92% 50%;             /* #f59e0b amber-500 */
+    --warning: 38 92% 50%;              /* #f59e0b amber-500 */
 
-    --radius: 8px;
+    --radius: 10px;
+  }
+
+  /* NexQuant Design System — Day / Light Mode */
+  .light {
+    --background: 220 20% 97%;         /* #f4f6f8 crisp light */
+    --foreground: 240 10% 3.9%;        /* #09090b dark text */
+    --surface: 0 0% 100%;              /* #ffffff crisp white cards */
+    --elevated: 220 14% 93%;           /* #eef1f5 elevated container */
+    --border: 220 13% 88%;             /* #dfe3ea high-contrast border */
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 9% 46%;    /* #6e7687 readable body */
+    --accent: 221 83% 53%;             /* #2563eb vivid blue */
+    --accent-foreground: 0 0% 100%;
+
+    /* High-contrast Semantic for Light Mode */
+    --bullish: 142 72% 34%;            /* #15803d darker green for contrast */
+    --bearish: 0 74% 48%;              /* #dc2626 darker red for contrast */
+    --warning: 38 92% 44%;             /* #d97706 darker amber */
   }
 
   * {
     border-color: hsl(var(--border));
+    transition-property: background-color, border-color, color;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
   }
 
   body {
@@ -32,6 +53,7 @@
     color: hsl(var(--foreground));
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
   }
 
   /* Accessible focus indicators */
@@ -74,5 +96,38 @@
   /* Tabular numbers for financial data */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Infinite Ticker Marquee Animation */
+  @keyframes tickerMarquee {
+    0% {
+      transform: translateX(0%);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-ticker-marquee {
+    display: flex;
+    width: max-content;
+    animation: tickerMarquee 42s linear infinite;
+  }
+
+  .animate-ticker-marquee:hover {
+    animation-play-state: paused;
+  }
+
+  /* Subtle card glow accents */
+  .glow-bullish {
+    box-shadow: 0 4px 24px -6px rgba(34, 197, 94, 0.15);
+  }
+
+  .glow-bearish {
+    box-shadow: 0 4px 24px -6px rgba(239, 68, 68, 0.15);
+  }
+
+  .glow-card {
+    box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.25);
   }
 }
