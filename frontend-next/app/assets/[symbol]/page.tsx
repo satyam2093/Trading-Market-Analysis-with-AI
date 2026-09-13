@@ -47,8 +47,21 @@ export default function AssetTerminalPage() {
       }
     }
     loadData();
+
+    // Periodic live feed update for serverless Vercel environments
+    const pollTimer = setInterval(() => {
+      if (active) {
+        fetchMarketData(symbol, timeframe).then((res) => {
+          if (active && res?.data) {
+            setMarketData(res);
+          }
+        });
+      }
+    }, 4000);
+
     return () => {
       active = false;
+      clearInterval(pollTimer);
     };
   }, [symbol, timeframe]);
 

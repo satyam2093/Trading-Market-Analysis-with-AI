@@ -4,16 +4,27 @@
  * Returns null on failure; UI handles loading/error states.
  */
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_RENDER_API_URL ||
-  (process.env.NODE_ENV === "production"
-    ? "https://trading-market-analysis-with-ai.onrender.com"
-    : "http://localhost:8000");
+export function getApiBase(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+  if (process.env.NEXT_PUBLIC_RENDER_API_URL) return process.env.NEXT_PUBLIC_RENDER_API_URL.replace(/\/$/, "");
+
+  // In the browser, relative URLs route seamlessly to Next.js API routes on Vercel or localhost
+  if (typeof window !== "undefined") {
+    return "";
+  }
+
+  // During server-side execution on Vercel
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  return process.env.NODE_ENV === "production" ? "" : "http://localhost:8000";
+}
 
 async function apiFetch<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+    const base = getApiBase();
+    const res = await fetch(`${base}${path}`, { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
@@ -23,7 +34,8 @@ async function apiFetch<T>(path: string): Promise<T | null> {
 
 async function apiPost<T>(path: string, body: unknown): Promise<T | null> {
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const base = getApiBase();
+    const res = await fetch(`${base}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -37,7 +49,8 @@ async function apiPost<T>(path: string, body: unknown): Promise<T | null> {
 
 async function apiDelete<T>(path: string, body: unknown): Promise<T | null> {
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const base = getApiBase();
+    const res = await fetch(`${base}${path}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -126,17 +139,26 @@ export function fetchSystemStatus() {
 
 // ── WebSocket URLs ───────────────────────────
 
-const WS_BASE =
-  process.env.NEXT_PUBLIC_WS_URL ||
-  process.env.NEXT_PUBLIC_RENDER_WS_URL ||
-  (process.env.NODE_ENV === "production"
-    ? "wss://trading-market-analysis-with-ai.onrender.com"
-    : "ws://localhost:8000");
+export function getWsBase(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL.replace(/\/$/, "");
+  if (process.env.NEXT_PUBLIC_RENDER_WS_URL) return process.env.NEXT_PUBLIC_RENDER_WS_URL.replace(/\/$/, "");
+
+  if (typeof window !== "undefined") {
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    if (isLocal) {
+      return "ws://localhost:8000";
+    }
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${window.location.host}`;
+  }
+
+  return "ws://localhost:8000";
+}
 
 export function getMarketWSUrl(symbol: string) {
-  return `${WS_BASE}/ws/market/${symbol}`;
+  return `${getWsBase()}/ws/market/${symbol}`;
 }
 
 export function getPredictionWSUrl(symbol: string) {
-  return `${WS_BASE}/ws/prediction/${symbol}`;
+  return `${getWsBase()}/ws/prediction/${symbol}`;
 }
