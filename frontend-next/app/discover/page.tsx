@@ -6,18 +6,42 @@ import { Search, Compass, ArrowRight } from "lucide-react";
 import { searchAssets } from "@/lib/api";
 import type { AssetInfo } from "@/types/market";
 
+const DEFAULT_POPULAR: AssetInfo[] = [
+  { id: "NIFTY50", symbol: "NIFTY50", name: "NIFTY 50 Index", asset_type: "INDEX", exchange: "NSE", country: "India", currency: "INR" },
+  { id: "SENSEX", symbol: "SENSEX", name: "BSE SENSEX 30", asset_type: "INDEX", exchange: "BSE", country: "India", currency: "INR" },
+  { id: "BANKNIFTY", symbol: "BANKNIFTY", name: "NIFTY Bank Index", asset_type: "INDEX", exchange: "NSE", country: "India", currency: "INR" },
+  { id: "TCS", symbol: "TCS", name: "Tata Consultancy Services", asset_type: "STOCK", exchange: "NSE", country: "India", currency: "INR" },
+  { id: "RELIANCE", symbol: "RELIANCE", name: "Reliance Industries Ltd.", asset_type: "STOCK", exchange: "NSE", country: "India", currency: "INR" },
+  { id: "SP500", symbol: "SP500", name: "S&P 500 Index", asset_type: "INDEX", exchange: "SNP", country: "United States", currency: "USD" },
+  { id: "NASDAQ", symbol: "NASDAQ", name: "NASDAQ Composite", asset_type: "INDEX", exchange: "NASDAQ", country: "United States", currency: "USD" },
+  { id: "DOW", symbol: "DOW", name: "Dow Jones Industrial Average", asset_type: "INDEX", exchange: "DJI", country: "United States", currency: "USD" },
+  { id: "SHANGHAI", symbol: "SHANGHAI", name: "Shanghai Composite Index", asset_type: "INDEX", exchange: "SSE", country: "China", currency: "CNY" },
+  { id: "HANGSENG", symbol: "HANGSENG", name: "Hang Seng Index", asset_type: "INDEX", exchange: "HKEX", country: "China", currency: "HKD" },
+  { id: "MOEX", symbol: "MOEX", name: "MOEX Russia Index", asset_type: "INDEX", exchange: "MCX", country: "Russia", currency: "RUB" },
+  { id: "NVDA", symbol: "NVDA", name: "NVIDIA Corporation", asset_type: "STOCK", exchange: "NASDAQ", country: "United States", currency: "USD" },
+  { id: "AAPL", symbol: "AAPL", name: "Apple Inc.", asset_type: "STOCK", exchange: "NASDAQ", country: "United States", currency: "USD" },
+  { id: "BTC", symbol: "BTC", name: "Bitcoin", asset_type: "CRYPTO", exchange: "BINANCE", country: "Global", currency: "USD" },
+  { id: "ETH", symbol: "ETH", name: "Ethereum", asset_type: "CRYPTO", exchange: "BINANCE", country: "Global", currency: "USD" },
+];
+
 export default function DiscoverPage() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
-  const [assets, setAssets] = useState<AssetInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [assets, setAssets] = useState<AssetInfo[]>(DEFAULT_POPULAR);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     searchAssets(query, typeFilter, 60).then((res) => {
       if (active) {
-        setAssets(res?.assets || []);
+        if (res?.assets && res.assets.length > 0) {
+          setAssets(res.assets);
+        } else if (!query) {
+          setAssets(DEFAULT_POPULAR);
+        } else {
+          setAssets([]);
+        }
         setLoading(false);
       }
     });
@@ -40,7 +64,7 @@ export default function DiscoverPage() {
             Discover & Screen Assets
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Search dynamically across US equities, Indian NSE shares, cryptocurrencies, and index ETFs
+            Search dynamically across Indian equities, US tech leaders, global indices (Sensex, Nifty, Bank Nifty), and cryptocurrencies
           </p>
         </div>
       </div>
@@ -53,13 +77,13 @@ export default function DiscoverPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by ticker symbol or company name (e.g. BTC, RELIANCE, NVDA, TCS)..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-lg bg-surface border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-muted-foreground"
+            placeholder="Search by ticker symbol or company name (e.g. TCS, NIFTY, SENSEX, RELIANCE, NVDA)..."
+            className="w-full pl-9 pr-4 py-2.5 rounded-lg bg-surface border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-muted-foreground font-mono"
           />
         </div>
 
         <div className="flex items-center rounded border border-border bg-surface p-1 text-xs font-mono w-full sm:w-auto">
-          {["ALL", "STOCK", "CRYPTO", "ETF", "INDEX"].map((t) => (
+          {["ALL", "INDEX", "STOCK", "CRYPTO", "ETF"].map((t) => (
             <button
               key={t}
               onClick={() => setTypeFilter(t)}
@@ -77,7 +101,7 @@ export default function DiscoverPage() {
 
       {/* Asset Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading ? (
+        {loading && assets.length === 0 ? (
           Array.from({ length: 9 }).map((_, i) => (
             <div key={i} className="p-5 rounded-xl bg-surface border border-border space-y-3 animate-pulse">
               <div className="h-5 w-20 bg-background rounded" />
@@ -98,7 +122,7 @@ export default function DiscoverPage() {
                     {asset.symbol}
                   </span>
                   <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
-                    {asset.asset_type}
+                    {asset.asset_type || (asset as any).assetType || "ASSET"}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground truncate max-w-[220px]">

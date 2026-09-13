@@ -1,14 +1,11 @@
 /**
  * NexQuant API Service Layer
- * Clean fetch wrappers — no hardcoded fallback data.
- * Returns null on failure; UI handles loading/error states.
+ * Resilient client with automatic failover between Render backend and Vercel serverless API routes.
+ * Guaranteed zero node connectivity crashes.
  */
 
 export function getApiBase(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
-  if (process.env.NEXT_PUBLIC_RENDER_API_URL) return process.env.NEXT_PUBLIC_RENDER_API_URL.replace(/\/$/, "");
-
-  // In the browser, relative URLs route seamlessly to Next.js API routes on Vercel or localhost
+  // In the browser, always use relative URLs ("") so requests go directly to Next.js API routes on Vercel or localhost
   if (typeof window !== "undefined") {
     return "";
   }
@@ -18,13 +15,34 @@ export function getApiBase(): string {
     return `https://${process.env.VERCEL_URL}`;
   }
 
-  return process.env.NODE_ENV === "production" ? "" : "http://localhost:8000";
+  return "";
 }
 
 async function apiFetch<T>(path: string): Promise<T | null> {
+  // 1. If an active custom Render backend is configured, attempt it with a strict timeout
+  const renderUrl = process.env.NEXT_PUBLIC_RENDER_API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (renderUrl && !renderUrl.includes("trading-market-analysis-with-ai.onrender.com")) {
+    try {
+      const cleanRender = renderUrl.replace(/\/$/, "");
+      const res = await fetch(`${cleanRender}${path}`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        return (await res.json()) as T;
+      }
+    } catch {
+      // Seamlessly fall through to Vercel Next.js routes
+    }
+  }
+
+  // 2. Query Vercel Next.js API Routes (Serverless Functions)
   try {
     const base = getApiBase();
-    const res = await fetch(`${base}${path}`, { cache: "no-store" });
+    const res = await fetch(`${base}${path}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    });
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
@@ -82,7 +100,13 @@ export function fetchFeaturedAssets() {
 }
 
 export function fetchHealth() {
-  return apiFetch<{ status: string; timestamp: string; database: string; market_data_service: string; websocket_gateway: string }>("/api/v1/health");
+  return apiFetch<{
+    status: string;
+    timestamp: string;
+    database: string;
+    market_data_service: string;
+    websocket_gateway: string;
+  }>("/api/v1/health");
 }
 
 export function fetchMarketData(symbol: string, timeframe = "1d", limit = 100) {
@@ -91,7 +115,7 @@ export function fetchMarketData(symbol: string, timeframe = "1d", limit = 100) {
   );
 }
 
-export function searchAssets(query: string, assetType = "ALL", limit = 20) {
+export function searchAssets(query: string, assetType = "ALL", limit = 60) {
   return apiFetch<AssetSearchResult>(
     `/api/v1/assets/search?query=${encodeURIComponent(query)}&asset_type=${assetType}&limit=${limit}`
   );
@@ -111,10 +135,15 @@ export function fetchFundamentals(symbol: string) {
   return apiFetch<FundamentalsResponse>(`/api/v1/fundamentals/${symbol}`);
 }
 
-// ── News ─────────────────────────────────────
+// ── Real-Time Financial News ─────────────────
 
-export function fetchNews(symbol: string) {
-  return apiFetch<any>(`/api/v1/news/${symbol}`);
+export function fetchNews(symbol?: string, limit = 12) {
+  const query = symbol ? `?symbol=${encodeURIComponent(symbol)}&limit=${limit}` : `?limit=${limit}`;
+  return apiFetch<{ articles: any[]; symbol?: string; timestamp: string }>(`/api/v1/news${query}`);
+}
+
+export function fetchMarketNews(limit = 15) {
+  return apiFetch<{ articles: any[]; timestamp: string }>(`/api/v1/news?limit=${limit}`);
 }
 
 // ── Watchlist ────────────────────────────────

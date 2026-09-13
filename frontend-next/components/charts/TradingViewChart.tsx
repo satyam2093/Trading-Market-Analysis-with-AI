@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CandleData, WSMarketPayload } from "@/types/market";
 
 type StreamState = "CONNECTED" | "RECONNECTING" | "DISCONNECTED";
@@ -31,33 +31,77 @@ function resolveMarketTimezone(symbol: string) {
   const normalized = symbol.trim().toUpperCase();
   if (!normalized) return "Etc/UTC";
 
-  if (normalized.endsWith(".NS") || normalized.endsWith(".BO") || [
-    "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "ITC", "WIPRO",
-    "BAJFINANCE", "TATAMOTORS", "LT", "MARUTI", "TITAN", "HAL", "BEL", "ADANIENT",
-    "NIFTY50", "SENSEX"
-  ].includes(normalized)) return "Asia/Kolkata";
+  if (
+    normalized.endsWith(".NS") ||
+    normalized.endsWith(".BO") ||
+    [
+      "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "ITC", "WIPRO",
+      "BAJFINANCE", "TATAMOTORS", "LT", "MARUTI", "TITAN", "HAL", "BEL", "ADANIENT",
+      "NIFTY50", "NIFTY", "SENSEX", "BANKNIFTY"
+    ].includes(normalized)
+  ) {
+    return "Asia/Kolkata";
+  }
 
-  if (["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "NFLX", "AMD",
-    "INTC", "WMT", "PLTR", "COIN", "SPY", "QQQ", "DIA"].includes(normalized)) return "America/New_York";
+  if (
+    [
+      "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "NFLX", "AMD",
+      "INTC", "WMT", "PLTR", "COIN", "SPY", "QQQ", "DIA", "DJI", "SPX"
+    ].includes(normalized)
+  ) {
+    return "America/New_York";
+  }
 
-  if (["BTC", "ETH", "SOL", "ADA", "XRP", "BNB", "DOGE", "LINK", "AVAX", "DOT", "NEAR", "SUI"].includes(normalized)) return "Etc/UTC";
+  if (["MOEX", "IMOEX"].includes(normalized)) return "Europe/Moscow";
+  if (["SHANGHAI", "000001.SS", "HSI", "HANGSENG"].includes(normalized)) return "Asia/Hong_Kong";
 
   return "Etc/UTC";
 }
 
-function resolveTradingViewSymbol(symbol: string) {
+export function resolveTradingViewSymbol(symbol: string): string {
   const normalized = symbol.trim().toUpperCase();
   if (!normalized) return "BINANCE:BTCUSDT";
 
-  const base = normalized.replace(/\.[A-Z]+$/, "");
-
-  if (normalized.endsWith(".NS")) return `NSE:${base}`;
-  if (normalized.endsWith(".BO")) return `BSE:${base}`;
-  if (["BTC", "ETH", "SOL", "ADA", "XRP", "BNB", "DOGE", "LINK", "AVAX", "DOT"].includes(normalized)) return `BINANCE:${normalized}USDT`;
-  if (["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "NFLX", "WMT", "AMD", "INTC"].includes(normalized)) return `NASDAQ:${normalized}`;
-  if (["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "ITC", "LTIM", "SUNPHARMA"].includes(normalized)) return `NSE:${normalized}`;
+  // Already prefixed with exchange
   if (normalized.includes(":")) return normalized;
 
+  // Indian Indices
+  if (["NIFTY", "NIFTY50", "^NSEI"].includes(normalized)) return "NSE:NIFTY";
+  if (["BANKNIFTY", "BANK_NIFTY", "^NSEBANK"].includes(normalized)) return "NSE:BANKNIFTY";
+  if (["SENSEX", "^BSESN"].includes(normalized)) return "BSE:SENSEX";
+
+  // Global Indices
+  if (["SPY", "^GSPC", "S&P500", "SPX"].includes(normalized)) return "AMEX:SPY";
+  if (["QQQ", "^IXIC", "NASDAQ"].includes(normalized)) return "NASDAQ:QQQ";
+  if (["DIA", "^DJI", "DOW", "DOWJONES"].includes(normalized)) return "INDEX:DJI";
+  if (["MOEX", "IMOEX", "IMOEX.ME"].includes(normalized)) return "MOEX:IMOEX";
+  if (["SHANGHAI", "000001.SS"].includes(normalized)) return "SSE:000001";
+  if (["HSI", "^HSI", "HANGSENG"].includes(normalized)) return "HSI:HSI";
+  if (["FTSE", "^FTSE"].includes(normalized)) return "INDEX:FTSE";
+  if (["N225", "^N225", "NIKKEI"].includes(normalized)) return "INDEX:N225";
+
+  // Indian Equities
+  const indianEquities = [
+    "TCS", "RELIANCE", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "BHARTIARTL",
+    "ITC", "WIPRO", "BAJFINANCE", "TATAMOTORS", "LT", "MARUTI", "TITAN",
+    "HAL", "BEL", "ADANIENT", "SUNPHARMA", "LTIM", "KOTAKBANK", "AXISBANK",
+    "ASIANPAINT", "HCLTECH", "NTPC", "POWERGRID"
+  ];
+  if (indianEquities.includes(normalized)) return `NSE:${normalized}`;
+  if (normalized.endsWith(".NS")) return `NSE:${normalized.replace(".NS", "")}`;
+  if (normalized.endsWith(".BO")) return `BSE:${normalized.replace(".BO", "")}`;
+
+  // Cryptocurrencies
+  const cryptos = ["BTC", "ETH", "SOL", "ADA", "XRP", "BNB", "DOGE", "LINK", "AVAX", "DOT", "NEAR", "SUI", "MATIC"];
+  const cleanCrypto = normalized.replace("-USD", "").replace("USDT", "");
+  if (cryptos.includes(cleanCrypto)) return `BINANCE:${cleanCrypto}USDT`;
+
+  // Major US Stocks
+  const usStocks = ["AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "TSLA", "META", "NFLX", "WMT", "AMD", "INTC", "PLTR", "COIN"];
+  if (usStocks.includes(normalized)) return `NASDAQ:${normalized}`;
+
+  // Default fallback based on characteristics
+  if (normalized.length <= 5) return `NASDAQ:${normalized}`;
   return `BINANCE:${normalized}USDT`;
 }
 
@@ -72,7 +116,10 @@ export default function TradingViewChart({
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<any>(null);
-  const widgetId = useId();
+
+  // Use a strictly alphanumeric DOM ID without colons to prevent TradingView CSS selector parser failures
+  const sanitizedId = `tv_chart_${symbol.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${timeframe || "1d"}`;
+
   const [isScriptReady, setIsScriptReady] = useState(false);
   const [userTimezone, setUserTimezone] = useState<string>("Etc/UTC");
 
@@ -90,10 +137,13 @@ export default function TradingViewChart({
   }, []);
 
   const chartTimezone = resolveMarketTimezone(symbol);
+  const tvSymbol = resolveTradingViewSymbol(symbol);
 
   useEffect(() => {
+    let unmounted = false;
+
     const loadWidget = () => {
-      if (!containerRef.current || typeof window === "undefined") return;
+      if (!containerRef.current || typeof window === "undefined" || unmounted) return;
       const target = containerRef.current;
       const TradingView = (window as any).TradingView;
       if (!TradingView?.widget) return;
@@ -101,7 +151,7 @@ export default function TradingViewChart({
       target.innerHTML = "";
       widgetRef.current = new TradingView.widget({
         autosize: true,
-        symbol: resolveTradingViewSymbol(symbol),
+        symbol: tvSymbol,
         interval: intervalMap[timeframe] || "D",
         timezone: chartTimezone === "Etc/UTC" && userTimezone ? userTimezone : chartTimezone,
         theme: "dark",
@@ -112,10 +162,11 @@ export default function TradingViewChart({
         hide_top_toolbar: false,
         save_image: false,
         withdateranges: true,
-        allow_symbol_change: false,
+        allow_symbol_change: true,
         details: true,
-        container_id: widgetId,
-        studies: ["Volume@tv-basicstudies", "RSI@tv-basicstudies"],
+        hotlist: true,
+        container_id: sanitizedId,
+        studies: ["Volume@tv-basicstudies", "RSI@tv-basicstudies", "MASimple@tv-basicstudies"],
       });
     };
 
@@ -125,32 +176,47 @@ export default function TradingViewChart({
     if ((window as any).TradingView?.widget) {
       setIsScriptReady(true);
       loadWidget();
-      return;
+      return () => {
+        unmounted = true;
+      };
     }
 
     if (existing) {
-      existing.addEventListener("load", () => {
-        setIsScriptReady(true);
-        loadWidget();
-      }, { once: true });
-      return;
+      existing.addEventListener(
+        "load",
+        () => {
+          if (!unmounted) {
+            setIsScriptReady(true);
+            loadWidget();
+          }
+        },
+        { once: true }
+      );
+      return () => {
+        unmounted = true;
+      };
     }
 
     const script = document.createElement("script");
     script.src = scriptUrl;
     script.async = true;
     script.onload = () => {
-      setIsScriptReady(true);
-      loadWidget();
+      if (!unmounted) {
+        setIsScriptReady(true);
+        loadWidget();
+      }
     };
-    script.onerror = () => setIsScriptReady(false);
+    script.onerror = () => {
+      if (!unmounted) setIsScriptReady(false);
+    };
     document.body.appendChild(script);
 
     return () => {
+      unmounted = true;
       script.onload = null;
       script.onerror = null;
     };
-  }, [symbol, timeframe, widgetId, chartTimezone, userTimezone]);
+  }, [tvSymbol, timeframe, sanitizedId, chartTimezone, userTimezone]);
 
   const status =
     liveTick?.market_status === "MARKET_CLOSED"
@@ -170,13 +236,15 @@ export default function TradingViewChart({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-semibold text-foreground">TradingView Advanced Chart</h3>
-            <span className="text-xs font-mono text-accent">({symbol})</span>
+            <h3 className="text-sm font-semibold text-foreground">TradingView Institutional Chart</h3>
+            <span className="text-xs font-mono text-accent font-semibold">[{tvSymbol}]</span>
             <span className="px-2 py-0.5 rounded-full bg-bullish/10 border border-bullish/30 text-bullish text-[10px] font-mono">
               {status === "LIVE" ? "●" : "○"} {status}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">Last update: {lastUpdate} · Chart timezone: {chartTimezone}</p>
+          <p className="text-xs text-muted-foreground">
+            Exchange Feed: <span className="font-mono text-foreground font-semibold">{tvSymbol}</span> · Timezone: {chartTimezone}
+          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -195,23 +263,23 @@ export default function TradingViewChart({
       </div>
 
       <div
-        id={widgetId}
+        id={sanitizedId}
         ref={containerRef}
-        className="w-full h-[420px] rounded-lg overflow-hidden border border-border/50 bg-background"
+        className="w-full h-[460px] rounded-lg overflow-hidden border border-border/50 bg-background"
       />
 
       {!isScriptReady && (
-        <div className="flex items-center justify-center h-[64px] rounded-lg border border-dashed border-border text-xs font-mono text-muted-foreground">
-          Loading TradingView chart...
+        <div className="flex items-center justify-center h-[64px] rounded-lg border border-dashed border-border text-xs font-mono text-muted-foreground animate-pulse">
+          Initializing TradingView high-resolution feed for {tvSymbol}...
         </div>
       )}
 
       <div className="flex items-center gap-6 pt-2 border-t border-border/40 text-xs font-mono text-muted-foreground">
-        <span><span className="w-2.5 h-2.5 inline-block rounded-sm bg-bullish" /> Bullish Candle</span>
-        <span><span className="w-2.5 h-2.5 inline-block rounded-sm bg-bearish" /> Bearish Candle</span>
+        <span><span className="w-2.5 h-2.5 inline-block rounded-sm bg-bullish" /> Bullish Bar</span>
+        <span><span className="w-2.5 h-2.5 inline-block rounded-sm bg-bearish" /> Bearish Bar</span>
         {liveTick?.price ? (
           <span className="ml-auto text-foreground font-semibold">
-            Live Tick: {currencySymbol}{liveTick.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            Last Price: {currencySymbol}{liveTick.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </span>
         ) : null}
       </div>
