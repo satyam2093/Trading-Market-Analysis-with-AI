@@ -96,12 +96,43 @@ class SentimentAnalysisEngine:
     def analyze_news_batch(self, news_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return [self.analyze_news_item(item) for item in news_items]
 
-    def compute_aggregate_sentiment(self, analyzed_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def compute_aggregate_sentiment(
+        self,
+        analyzed_items: List[Dict[str, Any]],
+        trading_style: Any = None,
+        half_life_hours: float = 24.0
+    ) -> Dict[str, Any]:
         if not analyzed_items:
             return {"aggregate_sentiment": "NEUTRAL", "aggregate_score": 0.0, "news_count": 0}
 
-        scores = [item["sentiment_score"] for item in analyzed_items]
-        avg_score = sum(scores) / len(scores)
+        if trading_style is not None:
+            from src.models.trading_style import get_trading_style_config
+            cfg = get_trading_style_config(trading_style)
+            half_life_hours = cfg.news_half_life_hours
+
+        # Compute decay weights: w_i = 0.5 ^ (age_hours / half_life_hours)
+        total_weight = 0.0
+        weighted_score_sum = 0.0
+        decay_constant = 0.693147 / max(0.1, half_life_hours)
+
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        for item in analyzed_items:
+            pub = item.get("published_at")
+            age_hours = 0.0
+            if pub:
+                try:
+                    pub_dt = datetime.datetime.fromisoformat(str(pub).replace("Z", "+00:00"))
+                    age_hours = max(0.0, (now - pub_dt).total_seconds() / 3600.0)
+                except Exception:
+                    age_hours = 0.0
+
+            weight = 2.71828 ** (-decay_constant * age_hours)
+            weighted_score_sum += item["sentiment_score"] * weight
+            total_weight += weight
+
+        avg_score = weighted_score_sum / max(1e-8, total_weight)
         high_impact = sum(1 for item in analyzed_items if item["impact_level"] == "HIGH")
 
         if avg_score > 0.15:
@@ -115,8 +146,10 @@ class SentimentAnalysisEngine:
             "aggregate_sentiment": agg_sent,
             "aggregate_score": round(avg_score, 4),
             "news_count": len(analyzed_items),
+            "half_life_hours": half_life_hours,
             "high_impact_count": high_impact,
             "positive_count": sum(1 for i in analyzed_items if i["sentiment"] == "POSITIVE"),
             "negative_count": sum(1 for i in analyzed_items if i["sentiment"] == "NEGATIVE"),
             "neutral_count": sum(1 for i in analyzed_items if i["sentiment"] == "NEUTRAL")
         }
+

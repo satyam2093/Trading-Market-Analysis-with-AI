@@ -123,11 +123,18 @@ export function searchAssets(query: string, assetType = "ALL", limit = 60) {
 
 // ── Predictions ──────────────────────────────
 
-export function fetchEnsembleSignal(symbol: string, timeframe = "1d") {
+export function fetchEnsembleSignal(symbol: string, timeframe = "1d", tradingStyle = "SWING") {
   return apiFetch<EnsembleResponse>(
-    `/api/v1/ensemble/${symbol}?timeframe=${timeframe}`
+    `/api/v1/ensemble/${symbol}?timeframe=${timeframe}&trading_style=${tradingStyle}`
   );
 }
+
+export function fetchBacktest(symbol: string, timeframe = "1d", tradingStyle = "SWING", walkForward = true) {
+  return apiFetch<any>(
+    `/api/v1/backtest/${symbol}?timeframe=${timeframe}&trading_style=${tradingStyle}&walk_forward=${walkForward}`
+  );
+}
+
 
 // ── Fundamentals ─────────────────────────────
 

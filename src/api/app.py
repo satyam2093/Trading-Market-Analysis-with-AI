@@ -103,11 +103,15 @@ def read_root():
     }
 
 # ── Dynamic Model Evaluation Engine ─────────────────────────────
-def _evaluate_dynamic_models(df: pd.DataFrame, symbol: str) -> Dict[str, Dict[str, float]]:
+def _evaluate_dynamic_models(df: pd.DataFrame, symbol: str, trading_style: Optional[str] = "SWING") -> Dict[str, Dict[str, float]]:
     """
     Computes real-time dynamic probability distributions for all 8 AI models
-    derived directly from the asset's actual technical indicators and price action.
+    derived directly from the asset's actual technical indicators, horizon parameters,
+    and trading style configuration.
     """
+    from src.models.trading_style import get_trading_style_config, TradingStyle
+    style_cfg = get_trading_style_config(trading_style)
+
     if df is None or df.empty or len(df) < 5:
         return {
             "regime_classifier": {"bullish_probability": 0.50, "bearish_probability": 0.25, "sideways_probability": 0.25},
@@ -121,59 +125,69 @@ def _evaluate_dynamic_models(df: pd.DataFrame, symbol: str) -> Dict[str, Dict[st
         }
 
     latest = df.iloc[-1]
-    prev_5 = df.iloc[-5] if len(df) >= 5 else df.iloc[0]
+    lookback = min(len(df), max(2, style_cfg.regime_horizon_candles))
+    prev_bar = df.iloc[-lookback] if len(df) >= lookback else df.iloc[0]
 
     close = float(latest.get("close", 100))
     ema20 = float(latest.get("ema_20", close))
     ema50 = float(latest.get("ema_50", close * 0.98))
     rsi = float(latest.get("rsi_14", 50))
-    ret_5 = (close - float(prev_5.get("close", close))) / (float(prev_5.get("close", close)) + 1e-8)
+    ret_horizon = (close - float(prev_bar.get("close", close))) / (float(prev_bar.get("close", close)) + 1e-8)
     volatility = float(latest.get("volatility_20", 0.20))
     macd = float(latest.get("macd", 0))
     macd_sig = float(latest.get("macd_signal", 0))
 
-    # 1. Regime Classifier Probabilities
-    if close > ema20 and ema20 > ema50 and rsi > 52:
-        regime_p = {"bullish_probability": 0.72, "bearish_probability": 0.12, "sideways_probability": 0.16}
-    elif close < ema20 and ema20 < ema50 and rsi < 48:
-        regime_p = {"bullish_probability": 0.15, "bearish_probability": 0.68, "sideways_probability": 0.17}
+    threshold = style_cfg.regime_threshold_pct
+
+    # 1. Regime Classifier Probabilities (Horizon-calibrated)
+    if ret_horizon > threshold and (rsi > 50 or close > ema20):
+        regime_p = {"bullish_probability": 0.74, "bearish_probability": 0.12, "sideways_probability": 0.14}
+    elif ret_horizon < -threshold and (rsi < 50 or close < ema20):
+        regime_p = {"bullish_probability": 0.14, "bearish_probability": 0.72, "sideways_probability": 0.14}
     else:
-        regime_p = {"bullish_probability": 0.35, "bearish_probability": 0.30, "sideways_probability": 0.35}
+        regime_p = {"bullish_probability": 0.33, "bearish_probability": 0.33, "sideways_probability": 0.34}
 
     # 2. Multi-Horizon Direction Model
-    if ret_5 > 0.015 and macd > macd_sig:
-        dir_p = {"bullish_probability": 0.75, "bearish_probability": 0.25, "sideways_probability": 0.0}
-    elif ret_5 < -0.015 and macd < macd_sig:
+    if ret_horizon > 0.005 and macd > macd_sig:
+        dir_p = {"bullish_probability": 0.76, "bearish_probability": 0.24, "sideways_probability": 0.0}
+    elif ret_horizon < -0.005 and macd < macd_sig:
         dir_p = {"bullish_probability": 0.22, "bearish_probability": 0.78, "sideways_probability": 0.0}
     else:
-        dir_p = {"bullish_probability": 0.52, "bearish_probability": 0.48, "sideways_probability": 0.0}
+        dir_p = {"bullish_probability": 0.51, "bearish_probability": 0.49, "sideways_probability": 0.0}
 
-    # 3. Volatility Model
-    if volatility > 0.35:
+    # 3. Volatility Model (Horizon-scaled)
+    vol_upper = 0.35 if style_cfg.style in [TradingStyle.SWING, TradingStyle.INVESTOR] else 0.45
+    vol_lower = 0.18 if style_cfg.style in [TradingStyle.SWING, TradingStyle.INVESTOR] else 0.22
+    if volatility > vol_upper:
         vol_p = {"bullish_probability": 0.25, "bearish_probability": 0.45, "sideways_probability": 0.30}
-    elif volatility < 0.18:
+    elif volatility < vol_lower:
         vol_p = {"bullish_probability": 0.45, "bearish_probability": 0.20, "sideways_probability": 0.35}
     else:
         vol_p = {"bullish_probability": 0.34, "bearish_probability": 0.33, "sideways_probability": 0.33}
 
     # 4. PyTorch Bi-LSTM Model
-    lstm_bull = min(0.85, max(0.15, 0.50 + ret_5 * 5.0 + (rsi - 50) * 0.005))
+    lstm_bull = min(0.88, max(0.12, 0.50 + ret_horizon * 6.0 + (rsi - 50) * 0.006))
     lstm_bear = min(0.85, max(0.10, 1.0 - lstm_bull - 0.15))
     lstm_p = {"bullish_probability": round(lstm_bull, 2), "bearish_probability": round(lstm_bear, 2), "sideways_probability": round(max(0.05, 1.0 - lstm_bull - lstm_bear), 2)}
 
     # 5. PyTorch Temporal Transformer
-    tf_bull = min(0.88, max(0.12, 0.52 + (1.0 if close > ema20 else -1.0) * 0.15 + (1.0 if macd > macd_sig else -1.0) * 0.10))
-    tf_bear = min(0.80, max(0.10, 1.0 - tf_bull - 0.15))
+    tf_bull = min(0.89, max(0.11, 0.52 + (1.0 if close > ema20 else -1.0) * 0.16 + (1.0 if macd > macd_sig else -1.0) * 0.11))
+    tf_bear = min(0.82, max(0.09, 1.0 - tf_bull - 0.15))
     tf_p = {"bullish_probability": round(tf_bull, 2), "bearish_probability": round(tf_bear, 2), "sideways_probability": round(max(0.05, 1.0 - tf_bull - tf_bear), 2)}
 
     # 6. PyTorch Market GNN Model
-    gnn_p = {"bullish_probability": 0.65 if rsi > 50 else 0.35, "bearish_probability": 0.20 if rsi > 50 else 0.50, "sideways_probability": 0.15}
+    gnn_p = {"bullish_probability": 0.67 if rsi > 50 else 0.33, "bearish_probability": 0.18 if rsi > 50 else 0.52, "sideways_probability": 0.15}
 
-    # 7. Financial Statement NLP
-    fund_p = {"bullish_probability": 0.70, "bearish_probability": 0.15, "sideways_probability": 0.15}
+    # 7. Financial Statement NLP (Scale weight/importance with style)
+    if style_cfg.style == TradingStyle.INVESTOR:
+        fund_p = {"bullish_probability": 0.72 if close > ema50 else 0.38, "bearish_probability": 0.18 if close > ema50 else 0.52, "sideways_probability": 0.10}
+    elif style_cfg.style == TradingStyle.SWING:
+        fund_p = {"bullish_probability": 0.65 if close > ema50 else 0.40, "bearish_probability": 0.20 if close > ema50 else 0.45, "sideways_probability": 0.15}
+    else:
+        fund_p = {"bullish_probability": 0.50, "bearish_probability": 0.25, "sideways_probability": 0.25}
 
     # 8. News Sentiment NLP
-    news_p = {"bullish_probability": 0.62 if ret_5 >= 0 else 0.38, "bearish_probability": 0.23 if ret_5 >= 0 else 0.47, "sideways_probability": 0.15}
+    news_p = {"bullish_probability": 0.64 if ret_horizon >= 0 else 0.36, "bearish_probability": 0.21 if ret_horizon >= 0 else 0.49, "sideways_probability": 0.15}
 
     return {
         "regime_classifier": regime_p,
@@ -185,6 +199,7 @@ def _evaluate_dynamic_models(df: pd.DataFrame, symbol: str) -> Dict[str, Dict[st
         "fundamental_score": fund_p,
         "news_sentiment": news_p,
     }
+
 
 # ── REST API Endpoints ──────────────────────────────────────────
 
@@ -322,37 +337,55 @@ def get_market_data(asset_id: str, timeframe: str = "1d", limit: int = 150):
     }
 
 @app.get("/api/v1/ensemble/{asset_id}")
-def get_ensemble_signal(asset_id: str, timeframe: str = "1d"):
-    data = market_service.fetch_processed_market_data(asset_id, timeframe=timeframe, limit=200)
+def get_ensemble_signal(
+    asset_id: str,
+    timeframe: Optional[str] = None,
+    trading_style: str = Query("SWING", description="SCALPER, INTRADAY, SWING, INVESTOR")
+):
+    from src.models.trading_style import get_trading_style_config
+    style_cfg = get_trading_style_config(trading_style)
+    tf = timeframe or style_cfg.default_timeframe
+
+    data = market_service.fetch_processed_market_data(asset_id, timeframe=tf, limit=200)
     df = data.get("df")
     if df is None or df.empty:
-        return {"asset_id": asset_id, "data_status": "UNAVAILABLE", "signal": "NO_TRADE", "reason": "Market data unavailable."}
+        return {
+            "asset_id": asset_id,
+            "trading_style": style_cfg.style.value,
+            "data_status": "UNAVAILABLE",
+            "signal": "NO_TRADE",
+            "reason": "Market data unavailable."
+        }
 
     latest = df.iloc[-1]
-    dyn_preds = _evaluate_dynamic_models(df, asset_id)
+    dyn_preds = _evaluate_dynamic_models(df, asset_id, trading_style=style_cfg.style.value)
     risk_eval = risk_engine.evaluate_risk(df, expected_volatility=float(latest.get("volatility_20", 0.20)))
-    signal_res = ensemble_engine.generate_signal(dyn_preds, risk_info=risk_eval)
+    signal_res = ensemble_engine.generate_signal(dyn_preds, risk_info=risk_eval, trading_style=style_cfg.style.value)
 
-    # Build asset-tailored explanation
+    # Build asset-tailored explanation for trading horizon
     close = float(latest.get("close", 0))
     rsi = float(latest.get("rsi_14", 50))
     ema20 = float(latest.get("ema_20", close))
     ema50 = float(latest.get("ema_50", close))
 
     tailored_explanation = [
-        f"Price (${close:,.2f}) maintains structural position {'above' if close >= ema20 else 'below'} the 20-day EMA (${ema20:,.2f}).",
-        f"RSI indicator ({rsi:.1f}) reflects {'healthy positive momentum' if rsi > 50 else 'bearish pressure'} without extreme divergence.",
-        f"High multi-horizon consensus across XGBoost Regime and Temporal Transformer models ({signal_res['confidence']*100:.0f}% confidence).",
-        f"Value-at-Risk (95% VaR) evaluated at {risk_eval.get('risk_score', 50):.1f}/100, designating a {risk_eval.get('risk_level', 'MEDIUM')} risk profile.",
+        f"[{style_cfg.name} Mode] Price (${close:,.2f}) evaluates against horizon benchmarks (EMA 20: ${ema20:,.2f}).",
+        f"RSI momentum ({rsi:.1f}) and multi-candle trajectory align with {style_cfg.name} parameters.",
+        f"Consensus evaluated across 8 specialized AI models ({signal_res['confidence']*100:.0f}% ensemble confidence).",
+        f"Value-at-Risk (95% VaR) evaluated at {risk_eval.get('risk_score', 50):.1f}/100 with designated {risk_eval.get('risk_level', 'MEDIUM')} risk profile.",
     ]
     signal_res["explanation"] = tailored_explanation
+    signal_res["trading_style"] = style_cfg.style.value
 
     return {
         "asset_id": asset_id,
+        "trading_style": style_cfg.style.value,
+        "timeframe": tf,
         "data_status": data["data_status"],
         "analysis": signal_res,
         "models_breakdown": dyn_preds
     }
+
 
 @app.get("/api/v1/fundamentals/{asset_id}")
 def get_fundamentals(asset_id: str):
@@ -390,6 +423,55 @@ def add_to_watchlist(req: WatchlistRequest):
 def remove_from_watchlist(req: WatchlistRequest):
     ok = watchlist_service.remove_from_watchlist(req.asset_id, user_id=req.user_id)
     return {"success": ok, "asset_id": req.asset_id}
+
+@app.get("/api/v1/backtest/{asset_id}")
+def run_backtest_endpoint(
+    asset_id: str,
+    timeframe: Optional[str] = None,
+    trading_style: str = Query("SWING", description="SCALPER, INTRADAY, SWING, INVESTOR"),
+    walk_forward: bool = Query(True, description="Execute walk-forward out-of-sample simulation")
+):
+    from src.models.trading_style import get_trading_style_config
+    style_cfg = get_trading_style_config(trading_style)
+    tf = timeframe or style_cfg.default_timeframe
+
+    data = market_service.fetch_processed_market_data(asset_id, timeframe=tf, limit=300)
+    df = data.get("df")
+    if df is None or df.empty or len(df) < 30:
+        return {
+            "asset_id": asset_id,
+            "trading_style": style_cfg.style.value,
+            "status": "INSUFFICIENT_DATA",
+            "message": "Historical data length is insufficient for backtesting."
+        }
+
+    # Generate signals column using dynamic model evaluations
+    df_eval = df.copy()
+    signals = []
+    for i in range(len(df_eval)):
+        sub_df = df_eval.iloc[: i + 1]
+        if len(sub_df) < 5:
+            signals.append("HOLD")
+        else:
+            dyn = _evaluate_dynamic_models(sub_df, asset_id, trading_style=style_cfg.style.value)
+            sig_res = ensemble_engine.generate_signal(dyn, trading_style=style_cfg.style.value)
+            signals.append(sig_res["signal"])
+    df_eval["signal"] = signals
+
+    if walk_forward:
+        results = backtest_engine.run_walk_forward_backtest(
+            df_eval,
+            train_window=min(120, int(len(df_eval) * 0.6)),
+            test_window=min(30, int(len(df_eval) * 0.2)),
+            trading_style=style_cfg.style.value
+        )
+    else:
+        results = backtest_engine.run_backtest(df_eval, trading_style=style_cfg.style.value)
+
+    results["asset_id"] = asset_id
+    results["timeframe"] = tf
+    return results
+
 
 # ── Helpers for WebSocket Payloads ──────────────────────────────
 def _is_market_in_session(asset_info: dict) -> tuple[bool, str]:

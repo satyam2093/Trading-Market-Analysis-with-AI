@@ -1,7 +1,7 @@
 import os
 import joblib
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import numpy as np
 import pandas as pd
 from xgboost import XGBRegressor
@@ -34,15 +34,36 @@ class VolatilityPredictionModel:
                 df_feats[col] = df_feats[col].astype(float)
         return df_feats[self.FEATURE_COLS].fillna(0.0)
 
-    def create_volatility_label(self, df: pd.DataFrame, forward_horizon: int = 5) -> pd.Series:
+    def create_volatility_label(
+        self,
+        df: pd.DataFrame,
+        forward_horizon: int = 5,
+        trading_style: Optional[Any] = None
+    ) -> pd.Series:
         """Target: Annualized volatility over next forward_horizon candles."""
+        if trading_style is not None:
+            from src.models.trading_style import get_trading_style_config
+            cfg = get_trading_style_config(trading_style)
+            forward_horizon = cfg.volatility_horizon_candles
+
         log_ret = np.log(df["close"] / (df["close"].shift(1) + 1e-8))
         fwd_vol = log_ret.rolling(window=forward_horizon).std().shift(-forward_horizon) * np.sqrt(252)
         return fwd_vol
 
-    def train(self, df: pd.DataFrame, forward_horizon: int = 5) -> Dict[str, Any]:
+    def train(
+        self,
+        df: pd.DataFrame,
+        forward_horizon: int = 5,
+        trading_style: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        if trading_style is not None:
+            from src.models.trading_style import get_trading_style_config
+            cfg = get_trading_style_config(trading_style)
+            forward_horizon = cfg.volatility_horizon_candles
+
         X = self.prepare_features(df)
         y = self.create_volatility_label(df, forward_horizon=forward_horizon)
+
 
         valid_idx = ~y.isnull() & (X.index < len(df) - forward_horizon)
         X = X[valid_idx]

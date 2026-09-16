@@ -23,23 +23,6 @@
     --radius: 10px;
   }
 
-  /* NexQuant Design System — Day / Light Mode */
-  .light {
-    --background: 220 20% 97%;         /* #f4f6f8 crisp light */
-    --foreground: 240 10% 3.9%;        /* #09090b dark text */
-    --surface: 0 0% 100%;              /* #ffffff crisp white cards */
-    --elevated: 220 14% 93%;           /* #eef1f5 elevated container */
-    --border: 220 13% 88%;             /* #dfe3ea high-contrast border */
-    --muted: 220 14% 93%;
-    --muted-foreground: 220 9% 46%;    /* #6e7687 readable body */
-    --accent: 221 83% 53%;             /* #2563eb vivid blue */
-    --accent-foreground: 0 0% 100%;
-
-    /* High-contrast Semantic for Light Mode */
-    --bullish: 142 72% 34%;            /* #15803d darker green for contrast */
-    --bearish: 0 74% 48%;              /* #dc2626 darker red for contrast */
-    --warning: 38 92% 44%;             /* #d97706 darker amber */
-  }
 
   * {
     border-color: hsl(var(--border));

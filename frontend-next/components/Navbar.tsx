@@ -3,11 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Menu, X, ArrowRight, TrendingUp, User, LogOut, LayoutDashboard, Sun, Moon } from "lucide-react";
+import { Search, Menu, X, ArrowRight, TrendingUp, User, LogOut, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { searchAssets } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
 import AuthModal from "@/components/auth/AuthModal";
 import type { AssetInfo } from "@/types/market";
 
@@ -33,7 +32,7 @@ const POPULAR_SEARCHES = [
 export default function Navbar() {
   const pathname = usePathname();
   const { authLoading, isAuthenticated, user, authModalOpen, authMode, openAuth, closeAuth, login, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+
   
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -134,20 +133,6 @@ export default function Navbar() {
 
             {/* Right side */}
             <div className="flex items-center gap-2">
-              {/* Day / Night Theme Switcher */}
-              <button
-                onClick={toggleTheme}
-                className="p-2 rounded-md border border-border bg-surface text-muted-foreground hover:text-foreground hover:bg-elevated transition-all flex items-center justify-center"
-                title={theme === "dark" ? "Switch to Day Mode" : "Switch to Night Mode"}
-                aria-label="Toggle day and night mode"
-              >
-                {theme === "dark" ? (
-                  <Sun className="w-4 h-4 text-amber-400 transition-transform" />
-                ) : (
-                  <Moon className="w-4 h-4 text-accent transition-transform" />
-                )}
-              </button>
-
               {/* Search trigger */}
               <button
                 onClick={() => setSearchOpen(true)}
@@ -160,6 +145,7 @@ export default function Navbar() {
                   ⌘K
                 </kbd>
               </button>
+
 
               {/* Reactive Auth Buttons */}
               {authLoading ? (
@@ -225,18 +211,8 @@ export default function Navbar() {
         {mobileOpen && (
           <div className="md:hidden border-t border-border bg-background">
             <nav className="px-4 py-4 space-y-1" aria-label="Mobile navigation">
-              {/* Mobile Theme Toggle */}
-              <button
-                onClick={toggleTheme}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-medium bg-surface text-foreground mb-2"
-              >
-                <span className="flex items-center gap-2">
-                  {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-accent" />}
-                  <span>{theme === "dark" ? "Switch to Day Mode" : "Switch to Night Mode"}</span>
-                </span>
-                <span className="text-xs font-mono text-muted-foreground uppercase">{theme}</span>
-              </button>
               {NAV_LINKS.map((link) => (
+
                 <Link
                   key={link.href}
                   href={link.href}

@@ -84,7 +84,20 @@ class TemporalTransformerModel:
         self.feature_means: Optional[np.ndarray] = None
         self.feature_stds: Optional[np.ndarray] = None
 
-    def prepare_sequences(self, df: pd.DataFrame, forward_horizon: int = 5, threshold: float = 0.015) -> Tuple[np.ndarray, np.ndarray]:
+    def prepare_sequences(
+        self,
+        df: pd.DataFrame,
+        forward_horizon: int = 5,
+        threshold: float = 0.015,
+        trading_style: Optional[Any] = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        if trading_style is not None:
+            from src.models.trading_style import get_trading_style_config
+            cfg = get_trading_style_config(trading_style)
+            self.seq_length = cfg.transformer_seq_len
+            forward_horizon = cfg.regime_horizon_candles
+            threshold = cfg.regime_threshold_pct
+
         df_feats = df.copy()
         for col in self.FEATURE_COLS:
             if col not in df_feats.columns:
@@ -108,8 +121,16 @@ class TemporalTransformerModel:
 
         return np.array(X, dtype=np.float32), np.array(y, dtype=np.int64)
 
-    def train(self, df: pd.DataFrame, epochs: int = 30, batch_size: int = 32, lr: float = 0.001) -> Dict[str, Any]:
-        X_arr, y_arr = self.prepare_sequences(df)
+    def train(
+        self,
+        df: pd.DataFrame,
+        epochs: int = 30,
+        batch_size: int = 32,
+        lr: float = 0.001,
+        trading_style: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        X_arr, y_arr = self.prepare_sequences(df, trading_style=trading_style)
+
         if len(X_arr) < 30:
             raise ValueError(f"Insufficient sequence samples ({len(X_arr)}) for Transformer training.")
 

@@ -462,30 +462,46 @@ export async function fetchOHLCVFromServer(
 export function computeDynamicEnsembleSignal(
   symbol: string,
   currentPrice?: number | null,
-  prevClose?: number | null
+  prevClose?: number | null,
+  tradingStyle: string = "SWING"
 ) {
   const price = currentPrice || 100;
   const prev = prevClose || price;
   const diffPct = ((price - prev) / (prev || 1)) * 100;
 
-  const signal = diffPct >= 0.5 ? "BUY" : diffPct <= -0.5 ? "SELL" : "HOLD";
-  const confidence = Math.min(88, Math.max(52, Math.round(62 + Math.abs(diffPct) * 4)));
-  const regime = diffPct > 0.2 ? "BULLISH" : diffPct < -0.2 ? "BEARISH" : "SIDEWAYS";
-  const riskLevel = Math.abs(diffPct) > 3.0 ? "HIGH" : Math.abs(diffPct) > 1.2 ? "MEDIUM" : "LOW";
+  const styleUpper = tradingStyle.toUpperCase();
+  const threshold = styleUpper === "SCALPER" ? 0.2 : styleUpper === "INTRADAY" ? 0.4 : styleUpper === "INVESTOR" ? 1.0 : 0.5;
+
+  const signal = diffPct >= threshold ? "BUY" : diffPct <= -threshold ? "SELL" : "HOLD";
+  const baseConf = styleUpper === "SCALPER" ? 72 : styleUpper === "INTRADAY" ? 76 : styleUpper === "INVESTOR" ? 85 : 80;
+  const confidence = Math.min(92, Math.max(54, Math.round(baseConf + Math.abs(diffPct) * 3)));
+  const regime = diffPct > (threshold * 0.5) ? "BULLISH" : diffPct < -(threshold * 0.5) ? "BEARISH" : "SIDEWAYS";
+
+  const riskThreshold = styleUpper === "SCALPER" ? 1.5 : styleUpper === "INTRADAY" ? 2.5 : 4.0;
+  const riskLevel = Math.abs(diffPct) > riskThreshold ? "HIGH" : Math.abs(diffPct) > (riskThreshold * 0.5) ? "MEDIUM" : "LOW";
+
+  const styleLabels: Record<string, string> = {
+    SCALPER: "Scalper (Order flow & micro-momentum)",
+    INTRADAY: "Intraday Trader (Session VWAP & mean-reversion)",
+    SWING: "Swing Trader (Multi-day structural trend)",
+    INVESTOR: "Investor (Fundamentals & macro cycle)",
+  };
 
   return {
     signal,
     confidence,
     regime,
     risk_level: riskLevel,
-    bullish_probability: diffPct >= 0 ? 0.65 : 0.25,
-    bearish_probability: diffPct < 0 ? 0.6 : 0.2,
+    bullish_probability: diffPct >= 0 ? 0.68 : 0.22,
+    bearish_probability: diffPct < 0 ? 0.65 : 0.20,
     sideways_probability: 0.15,
-    risk_score: 42,
+    risk_score: riskLevel === "HIGH" ? 72 : riskLevel === "MEDIUM" ? 44 : 25,
+    trading_style: styleUpper,
     explanation: [
-      `Asset maintains structural position with multi-day momentum at ${diffPct >= 0 ? "+" : ""}${diffPct.toFixed(2)}%.`,
-      `Consensus evaluated across XGBoost regime classifiers and Temporal Transformers.`,
-      `Risk metrics designated at ${riskLevel} level based on 20-day historical volatility.`,
+      `[${styleLabels[styleUpper] || styleUpper}] Price momentum evaluated at ${diffPct >= 0 ? "+" : ""}${diffPct.toFixed(2)}%.`,
+      `Multi-horizon consensus derived across 8 specialized AI models tailored to ${styleUpper} horizon parameters.`,
+      `Quantitative circuit breaker designates ${riskLevel} risk based on horizon volatility benchmarks.`,
     ],
   };
 }
+

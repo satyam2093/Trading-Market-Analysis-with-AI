@@ -1,18 +1,22 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { fetchLiveQuoteFromServer, computeDynamicEnsembleSignal } from "@/lib/serverMarketService";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { symbol: string } }
 ) {
   const symbol = params.symbol || "BTC";
+  const { searchParams } = new URL(request.url);
+  const tradingStyle = searchParams.get("trading_style") || "SWING";
+
   const quote = await fetchLiveQuoteFromServer(symbol);
-  const signal = computeDynamicEnsembleSignal(symbol, quote.price, quote.previous_close);
+  const signal = computeDynamicEnsembleSignal(symbol, quote.price, quote.previous_close, tradingStyle);
 
   return NextResponse.json({
     asset_id: symbol,
+    trading_style: tradingStyle,
     data_status: quote.data_status,
     analysis: signal,
     models_breakdown: {
@@ -27,3 +31,4 @@ export async function GET(
     },
   });
 }
+

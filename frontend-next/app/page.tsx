@@ -21,7 +21,11 @@ import {
 } from "lucide-react";
 import { fetchMarketOverview, fetchFeaturedAssets, fetchMarketNews } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useTradingStyle } from "@/context/TradingStyleContext";
+import TradingStyleSelector from "@/components/trading/TradingStyleSelector";
+import NewsImpactPanel from "@/components/news/NewsImpactPanel";
 import type { MarketOverviewItem } from "@/types/market";
+
 
 interface FeaturedAsset {
   symbol: string;
@@ -552,18 +556,44 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── 5. FEATURED QUANTITATIVE SIGNALS ── */}
+      {/* ── 5. NEWS IMPACT MODEL ── */}
+      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+        <NewsImpactPanel newsItems={news} />
+      </section>
+
+      {/* ── 6. YOUR TRADING STYLE ADAPTATION ── */}
+      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-accent" />
+            <span className="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
+              MULTI-HORIZON ADAPTATION ENGINE
+            </span>
+          </div>
+          <h2 className="text-2xl sm:text-4xl font-normal text-foreground tracking-tight pt-1">
+            Tailor NexQuant to Your Trading Style
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Choose your execution horizon. Models instantly recalibrate target windows, feature lookbacks, stop-loss formulas, and news decay half-lives.
+          </p>
+        </div>
+
+        <TradingStyleSelector />
+      </section>
+
+      {/* ── 7. STYLE-SPECIFIC AI ANALYSIS & TOP ASSETS ── */}
       <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
           <div className="space-y-1">
             <h2 className="text-2xl sm:text-3xl font-normal text-foreground tracking-tight">
-              Featured Quantitative Signals
+              Top Assets & Horizon Consensus Signals
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Multi-model ensemble consensus evaluated in real time from live provider feeds
             </p>
           </div>
           <Link href="/discover" className="text-xs font-mono text-accent hover:underline flex items-center gap-1">
+
             View All Discovered Assets →
           </Link>
         </div>

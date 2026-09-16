@@ -30,7 +30,8 @@ class EnsembleDecisionEngine:
     def generate_signal(
         self,
         model_predictions: Dict[str, Dict[str, Any]],
-        risk_info: Optional[Dict[str, Any]] = None
+        risk_info: Optional[Dict[str, Any]] = None,
+        trading_style: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Produces a unified trading signal from multiple model outputs.
@@ -40,6 +41,15 @@ class EnsembleDecisionEngine:
 
         Returns signal dict with BUY/SELL/HOLD/NO_TRADE, probabilities, confidence, risk, explanation.
         """
+        if trading_style is not None:
+            from src.models.trading_style import get_trading_style_config
+            cfg = get_trading_style_config(trading_style)
+            active_weights = cfg.model_weights
+            style_name = cfg.name
+        else:
+            active_weights = self.weights
+            style_name = "Standard"
+
         weighted_bullish = 0.0
         weighted_bearish = 0.0
         weighted_sideways = 0.0
@@ -47,7 +57,7 @@ class EnsembleDecisionEngine:
         contributing_models = []
 
         for model_name, pred in model_predictions.items():
-            w = self.weights.get(model_name, 0.05)
+            w = active_weights.get(model_name, 0.05)
             bp = float(pred.get("bullish_probability", 0.33))
             brp = float(pred.get("bearish_probability", 0.33))
             sp = float(pred.get("sideways_probability", 0.34))
@@ -57,6 +67,7 @@ class EnsembleDecisionEngine:
             weighted_sideways += w * sp
             total_weight += w
             contributing_models.append(model_name)
+
 
         if total_weight > 0:
             weighted_bullish /= total_weight

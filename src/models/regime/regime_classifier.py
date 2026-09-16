@@ -32,13 +32,25 @@ class MarketRegimeClassifier:
         self.model = None
         self.is_trained = False
 
-    def create_regime_labels(self, df: pd.DataFrame, forward_horizon: int = 5, threshold: float = 0.015) -> pd.Series:
+    def create_regime_labels(
+        self,
+        df: pd.DataFrame,
+        forward_horizon: int = 5,
+        threshold: float = 0.015,
+        trading_style: Optional[Any] = None
+    ) -> pd.Series:
         """
         Creates target regime labels:
         1 (BULLISH)  : forward return > threshold
         2 (BEARISH)  : forward return < -threshold
         0 (SIDEWAYS) : -threshold <= forward return <= threshold
         """
+        if trading_style is not None:
+            from src.models.trading_style import get_trading_style_config
+            cfg = get_trading_style_config(trading_style)
+            forward_horizon = cfg.regime_horizon_candles
+            threshold = cfg.regime_threshold_pct
+
         fwd_return = df["close"].pct_change(forward_horizon).shift(-forward_horizon)
         labels = np.zeros(len(df), dtype=int)
         labels[fwd_return > threshold] = 1
@@ -56,10 +68,23 @@ class MarketRegimeClassifier:
                 df_feats[col] = 0.0
         return df_feats[self.FEATURE_COLS].fillna(0.0)
 
-    def train(self, df: pd.DataFrame, forward_horizon: int = 5, threshold: float = 0.015) -> Dict[str, Any]:
-        """Trains the regime classification model."""
+    def train(
+        self,
+        df: pd.DataFrame,
+        forward_horizon: int = 5,
+        threshold: float = 0.015,
+        trading_style: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """Trains the regime classification model adapted to trading horizon."""
+        if trading_style is not None:
+            from src.models.trading_style import get_trading_style_config
+            cfg = get_trading_style_config(trading_style)
+            forward_horizon = cfg.regime_horizon_candles
+            threshold = cfg.regime_threshold_pct
+
         X = self.prepare_features(df)
         y = self.create_regime_labels(df, forward_horizon=forward_horizon, threshold=threshold)
+
 
         # Drop last N rows where target label is NaN due to shift
         valid_idx = ~y.isnull() & (X.index < len(df) - forward_horizon)

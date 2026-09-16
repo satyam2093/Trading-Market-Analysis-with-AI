@@ -17,16 +17,17 @@ class NewsNLPModel:
         self.news_provider = NewsDataProvider()
         self.sentiment_engine = SentimentAnalysisEngine()
 
-    def run_pipeline(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
+    def run_pipeline(self, symbol: str, limit: int = 20, trading_style: Any = None) -> Dict[str, Any]:
         """
-        Executes complete news intelligence pipeline for a given asset symbol.
+        Executes complete news intelligence pipeline for a given asset symbol with horizon decay.
         """
         raw_news = self.news_provider.fetch_recent_news(symbol, limit=limit)
         analyzed = self.sentiment_engine.analyze_news_batch(raw_news)
-        aggregate = self.sentiment_engine.compute_aggregate_sentiment(analyzed)
+        aggregate = self.sentiment_engine.compute_aggregate_sentiment(analyzed, trading_style=trading_style)
 
         return {
             "asset_symbol": symbol,
             "news_items": analyzed,
             "aggregate": aggregate
         }
+

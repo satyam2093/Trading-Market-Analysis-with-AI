@@ -8,12 +8,15 @@ import { ArrowLeft } from "lucide-react";
 import { fetchMarketData, fetchEnsembleSignal, fetchFundamentals } from "@/lib/api";
 import { useMarketWebSocket, usePredictionWebSocket } from "@/lib/useWebSocket";
 import { getCurrencyCode } from "@/lib/utils";
+import { useTradingStyle } from "@/context/TradingStyleContext";
+import TradingStyleSelector from "@/components/trading/TradingStyleSelector";
 import TradingViewChart from "@/components/charts/TradingViewChart";
 import AIOutlook from "@/components/ai/AIOutlook";
 import TechnicalSummary from "@/components/technical/TechnicalSummary";
 import FundamentalsIntelligence from "@/components/fundamentals/FundamentalsIntelligence";
 import ModelConsensus from "@/components/ai/ModelConsensus";
 import type { MarketDataResponse, FundamentalsResponse } from "@/types/market";
+
 
 export default function AssetTerminalPage() {
   const params = useParams();
@@ -30,13 +33,15 @@ export default function AssetTerminalPage() {
   const { marketData: wsMarket, connectionState } = useMarketWebSocket(symbol, timeframe);
   const { predictionData: wsPrediction } = usePredictionWebSocket(symbol);
 
+  const { style, styleInfo } = useTradingStyle();
+
   useEffect(() => {
     let active = true;
     async function loadData() {
       setLoading(true);
       const [mRes, sRes, fRes] = await Promise.all([
         fetchMarketData(symbol, timeframe),
-        fetchEnsembleSignal(symbol, timeframe),
+        fetchEnsembleSignal(symbol, timeframe, style),
         fetchFundamentals(symbol),
       ]);
       if (active) {
@@ -47,6 +52,7 @@ export default function AssetTerminalPage() {
       }
     }
     loadData();
+
 
     // Periodic live feed update for serverless Vercel environments
     const pollTimer = setInterval(() => {
@@ -213,7 +219,21 @@ export default function AssetTerminalPage() {
         </div>
       </div>
 
+      {/* Active Trading Style Horizon Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-surface border border-border">
+
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono font-bold text-foreground">TRADING HORIZON:</span>
+            <span className="text-xs font-mono text-accent">{styleInfo.name} ({styleInfo.predictionHorizon})</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Recalibrates model features, sequence lengths, stop-loss triggers, and news decay half-life.</p>
+        </div>
+        <TradingStyleSelector compact={true} />
+      </div>
+
       {/* AI Outlook Component with Real Analysis */}
+
       <AIOutlook
         symbol={symbol}
         signal={signal}

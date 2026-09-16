@@ -1,7 +1,7 @@
 import os
 import joblib
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -42,12 +42,26 @@ class PriceDirectionModel:
         fwd_ret = df["close"].pct_change(horizon).shift(-horizon)
         return (fwd_ret > 0).astype(int)
 
-    def train(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Trains individual classifiers for each prediction horizon."""
+    def train(
+        self,
+        df: pd.DataFrame,
+        horizons: Optional[List[int]] = None,
+        trading_style: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """Trains individual classifiers for each prediction horizon, tailored by trading style."""
+        if trading_style is not None:
+            from src.models.trading_style import get_trading_style_config
+            cfg = get_trading_style_config(trading_style)
+            target_horizons = cfg.direction_horizons
+        elif horizons is not None:
+            target_horizons = horizons
+        else:
+            target_horizons = self.HORIZONS
+
         X_all = self.prepare_features(df)
         results = {}
 
-        for horizon in self.HORIZONS:
+        for horizon in target_horizons:
             y_all = self.create_direction_label(df, horizon)
             valid_idx = ~y_all.isnull() & (X_all.index < len(df) - horizon)
             X = X_all[valid_idx]
@@ -56,6 +70,7 @@ class PriceDirectionModel:
             if len(X) < 20:
                 logger.warning(f"Insufficient samples for horizon {horizon} training.")
                 continue
+
 
             if self.model_type == "xgboost":
                 clf = XGBClassifier(n_estimators=80, max_depth=3, learning_rate=0.05, eval_metric="logloss", random_state=42)
