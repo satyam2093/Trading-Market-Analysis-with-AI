@@ -13,6 +13,7 @@ import {
   TrendingUp,
   TrendingDown,
   Clock,
+  Sparkles,
 } from "lucide-react";
 import { fetchNews, fetchMarketNews } from "@/lib/api";
 
@@ -27,6 +28,47 @@ interface NewsArticle {
   summary?: string;
   image_url: string;
   category?: string;
+}
+
+function cleanSummaryDisplay(summary?: string, title?: string, category?: string): string {
+  if (!summary) {
+    return "Executive financial market intelligence covering " + (category || "market movements") + ". Quantitative tracking active across institutional feeds.";
+  }
+  let clean = summary
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&lt;[^&]*&gt;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // If after stripping, it still looks like an HTML tag, link, or RSS noise, replace with clean digest
+  if (
+    clean.includes("http://") ||
+    clean.includes("https://") ||
+    clean.includes("news.google.com") ||
+    clean.includes("href=") ||
+    clean.startsWith("<") ||
+    clean.startsWith("&lt;") ||
+    clean.startsWith("a href") ||
+    clean.length < 25 ||
+    clean.toLowerCase() === title?.toLowerCase()
+  ) {
+    return "Executive market coverage on " + (category || "benchmark equities") + " and macroeconomic catalysts affecting intraday sentiment and sector rotations.";
+  }
+
+  if (clean.length > 220) {
+    const trimmed = clean.slice(0, 215);
+    const lastSpace = trimmed.lastIndexOf(" ");
+    return (lastSpace > 100 ? trimmed.slice(0, lastSpace) : trimmed) + "...";
+  }
+
+  return clean;
 }
 
 export default function NewsPage() {
@@ -55,7 +97,7 @@ export default function NewsPage() {
             url: a.url || "#",
             sentiment: normalizeSentiment(a.sentiment),
             impact: a.impact || "MEDIUM",
-            summary: a.summary || "",
+            summary: cleanSummaryDisplay(a.summary, a.title, a.category),
             image_url:
               a.image_url ||
               "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=900&auto=format&fit=crop&q=80",
@@ -113,23 +155,23 @@ export default function NewsPage() {
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
       {/* ── 1. HEADER & LIVE STATUS ── */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-border">
-        <div className="space-y-1">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-border/80">
+        <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Newspaper className="w-4 h-4 text-accent" />
             <span className="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
               NEXQUANT GLOBAL NEWS WIRE
             </span>
-            <span className="w-2 h-2 rounded-full bg-bullish animate-pulse" />
-            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-surface border border-border text-bullish">
-              REAL-TIME
+            <span className="w-2 h-2 rounded-full bg-bullish animate-pulse pulse-indicator-live" />
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-surface border border-bullish/30 text-bullish font-semibold">
+              LIVE FEEDS
             </span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-normal text-foreground tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-semibold text-foreground tracking-tight text-gradient-hero">
             Financial News & Media Intelligence
           </h1>
-          <p className="text-sm text-muted-foreground max-w-2xl font-normal">
-            Real-world macroeconomic reporting, central bank announcements, and earnings disclosures with AI-evaluated sentiment
+          <p className="text-sm text-muted-foreground max-w-2xl font-normal leading-relaxed">
+            Real-world macroeconomic reporting, central bank announcements, and earnings disclosures with AI-evaluated sentiment.
           </p>
         </div>
 
@@ -143,9 +185,9 @@ export default function NewsPage() {
           <button
             onClick={() => loadNews(activeTopic)}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-surface border border-border text-xs font-mono text-foreground hover:bg-elevated transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-surface border border-border text-xs font-mono text-foreground hover:bg-elevated hover:border-accent/40 transition-all disabled:opacity-50 shadow-sm"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-accent" : ""}`} />
+            <RefreshCw className={"w-3.5 h-3.5 " + (isRefreshing ? "animate-spin text-accent" : "")} />
             <span>{isRefreshing ? "Syncing..." : "Sync Live Wire"}</span>
           </button>
         </div>
@@ -166,11 +208,11 @@ export default function NewsPage() {
                   setLoading(true);
                   loadNews(topic.val);
                 }}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-mono whitespace-nowrap border transition-all ${
-                  isSelected
-                    ? "bg-foreground text-background border-foreground font-semibold shadow-sm"
-                    : "bg-surface text-muted-foreground border-border hover:text-foreground hover:border-muted-foreground/50"
-                }`}
+                className={"px-4 py-2 rounded-full text-xs font-mono whitespace-nowrap border transition-all " +
+                  (isSelected
+                    ? "bg-foreground text-background border-foreground font-semibold shadow-md"
+                    : "bg-surface/80 text-muted-foreground border-border hover:text-foreground hover:border-accent/40 hover:bg-elevated")
+                }
               >
                 {topic.label}
               </button>
@@ -181,18 +223,18 @@ export default function NewsPage() {
         {/* Search Form */}
         <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 min-w-[280px]">
           <div className="relative flex-1">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+            <Search className="w-3.5 h-3.5 absolute left-3.5 top-3 text-muted-foreground" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search ticker, company, or event..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-md bg-surface border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent font-mono"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent font-mono transition-colors"
             />
           </div>
           <button
             type="submit"
-            className="px-3.5 py-1.5 rounded-md bg-foreground text-background text-xs font-mono font-medium hover:bg-foreground/90 transition-colors shrink-0"
+            className="px-4 py-2 rounded-lg bg-foreground text-background text-xs font-mono font-medium hover:bg-foreground/90 transition-colors shrink-0 shadow-sm"
           >
             Filter
           </button>
@@ -210,16 +252,16 @@ export default function NewsPage() {
           <span className="text-muted-foreground/60">({filteredNews.length} articles)</span>
         </div>
 
-        <div className="flex items-center rounded border border-border bg-surface p-1 text-xs font-mono">
+        <div className="flex items-center rounded-lg border border-border bg-surface/80 p-1 text-xs font-mono">
           {["ALL", "POSITIVE", "NEUTRAL", "NEGATIVE"].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-3 py-1 rounded transition-colors ${
-                filter === f
-                  ? "bg-elevated text-foreground font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={"px-3 py-1 rounded-md transition-colors " +
+                (filter === f
+                  ? "bg-elevated text-foreground font-semibold shadow-sm"
+                  : "text-muted-foreground hover:text-foreground")
+              }
             >
               {f}
             </button>
@@ -229,22 +271,22 @@ export default function NewsPage() {
 
       {/* ── 4. FEATURED HERO STORY (TOP OF PAGE) ── */}
       {!loading && featuredStory && (
-        <div className="rounded-2xl border border-border bg-surface overflow-hidden hover:border-muted-foreground/50 transition-all group">
+        <div className="rounded-2xl border border-border/80 bg-surface/90 glass-card overflow-hidden hover:border-accent/40 transition-all group">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
             {/* Image Column */}
-            <div className="lg:col-span-7 relative h-[260px] sm:h-[340px] lg:h-[400px] overflow-hidden bg-background">
+            <div className="lg:col-span-7 relative h-[280px] sm:h-[360px] lg:h-[420px] overflow-hidden bg-background">
               <img
                 src={featuredStory.image_url}
                 alt={featuredStory.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent lg:hidden" />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/30 to-transparent lg:hidden" />
               <div className="absolute top-4 left-4 flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-full bg-background/80 backdrop-blur-md border border-border/60 text-[11px] font-mono font-semibold text-foreground flex items-center gap-1.5">
-                  <Flame className="w-3 h-3 text-amber-500" /> TOP STORY
+                <span className="px-3 py-1 rounded-full bg-background/85 backdrop-blur-md border border-border/80 text-[11px] font-mono font-semibold text-foreground flex items-center gap-1.5 shadow-md">
+                  <Flame className="w-3.5 h-3.5 text-amber-500" /> TOP STORY
                 </span>
                 {featuredStory.category && (
-                  <span className="px-2.5 py-1 rounded-full bg-accent/90 backdrop-blur-md text-white text-[11px] font-mono font-semibold">
+                  <span className="px-3 py-1 rounded-full bg-accent/90 backdrop-blur-md text-white text-[11px] font-mono font-semibold shadow-md">
                     {featuredStory.category}
                   </span>
                 )}
@@ -272,8 +314,8 @@ export default function NewsPage() {
                 </a>
 
                 {featuredStory.summary && (
-                  <p className="text-sm text-muted-foreground leading-relaxed line-clamp-4">
-                    {featuredStory.summary}
+                  <p className="text-sm text-muted-foreground leading-relaxed line-clamp-4 font-normal">
+                    {cleanSummaryDisplay(featuredStory.summary, featuredStory.title, featuredStory.category)}
                   </p>
                 )}
               </div>
@@ -281,18 +323,18 @@ export default function NewsPage() {
               <div className="pt-4 border-t border-border/60 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span
-                    className={`px-2.5 py-0.5 rounded text-xs font-mono font-semibold border ${
-                      featuredStory.sentiment === "POSITIVE"
+                    className={"px-3 py-1 rounded-full text-xs font-mono font-semibold border " +
+                      (featuredStory.sentiment === "POSITIVE"
                         ? "bg-bullish/10 text-bullish border-bullish/30"
                         : featuredStory.sentiment === "NEGATIVE"
                           ? "bg-bearish/10 text-bearish border-bearish/30"
-                          : "bg-background text-muted-foreground border-border"
-                    }`}
+                          : "bg-background text-muted-foreground border-border")
+                    }
                   >
                     {featuredStory.sentiment}
                   </span>
                   {featuredStory.impact && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-background border border-border text-muted-foreground">
+                    <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-background border border-border text-muted-foreground">
                       {featuredStory.impact} IMPACT
                     </span>
                   )}
@@ -302,9 +344,9 @@ export default function NewsPage() {
                   href={featuredStory.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-accent hover:underline"
+                  className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold text-accent hover:underline"
                 >
-                  <span>Read Coverage</span>
+                  <span>Read Story</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
@@ -317,7 +359,7 @@ export default function NewsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading ? (
           Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="rounded-2xl border border-border bg-surface overflow-hidden space-y-3 animate-pulse">
+            <div key={i} className="rounded-2xl border border-border/80 bg-surface/80 overflow-hidden space-y-3 animate-pulse">
               <div className="h-48 bg-background" />
               <div className="p-5 space-y-3">
                 <div className="h-4 w-1/3 bg-background rounded" />
@@ -330,7 +372,7 @@ export default function NewsPage() {
           gridStories.map((item, idx) => (
             <div
               key={idx}
-              className="rounded-2xl border border-border bg-surface overflow-hidden hover:border-muted-foreground/40 transition-all flex flex-col justify-between group space-y-4 hover:shadow-lg"
+              className="rounded-2xl border border-border/80 bg-surface/80 glass-card overflow-hidden hover:border-accent/40 transition-all flex flex-col justify-between group space-y-4 shadow-md hover:shadow-xl"
             >
               {/* Thumbnail with overlay tags */}
               <div className="relative h-48 w-full overflow-hidden bg-background">
@@ -340,10 +382,10 @@ export default function NewsPage() {
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-transparent to-transparent" />
                 <div className="absolute top-3 left-3 flex items-center gap-1.5">
                   {item.category && (
-                    <span className="px-2 py-0.5 rounded bg-background/85 backdrop-blur-md border border-border/60 text-[10px] font-mono font-semibold text-foreground">
+                    <span className="px-2.5 py-0.5 rounded-full bg-background/90 backdrop-blur-md border border-border/80 text-[10px] font-mono font-semibold text-foreground">
                       {item.category}
                     </span>
                   )}
@@ -369,7 +411,7 @@ export default function NewsPage() {
 
                   {item.summary && (
                     <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed font-normal">
-                      {item.summary}
+                      {cleanSummaryDisplay(item.summary, item.title, item.category)}
                     </p>
                   )}
                 </div>
@@ -377,13 +419,13 @@ export default function NewsPage() {
                 {/* Footer metadata */}
                 <div className="pt-3 border-t border-border/60 flex items-center justify-between text-xs font-mono">
                   <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                      item.sentiment === "POSITIVE"
+                    className={"px-2.5 py-0.5 rounded-full text-[10px] font-semibold border " +
+                      (item.sentiment === "POSITIVE"
                         ? "bg-bullish/10 text-bullish border-bullish/30"
                         : item.sentiment === "NEGATIVE"
                           ? "bg-bearish/10 text-bearish border-bearish/30"
-                          : "bg-background text-muted-foreground border-border"
-                    }`}
+                          : "bg-background text-muted-foreground border-border")
+                    }
                   >
                     {item.sentiment}
                   </span>
@@ -392,9 +434,9 @@ export default function NewsPage() {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] font-mono text-accent hover:underline"
+                    className="inline-flex items-center gap-1 text-[11px] font-mono text-accent hover:underline font-medium"
                   >
-                    <span>Source</span>
+                    <span>Read Story</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
@@ -417,7 +459,7 @@ export default function NewsPage() {
                 setSearchQuery("");
                 loadNews("");
               }}
-              className="px-4 py-2 rounded-md bg-foreground text-background text-xs font-mono font-semibold hover:bg-foreground/90 transition-colors"
+              className="px-4 py-2 rounded-lg bg-foreground text-background text-xs font-mono font-semibold hover:bg-foreground/90 transition-colors shadow-sm"
             >
               Reset to Global Wire
             </button>

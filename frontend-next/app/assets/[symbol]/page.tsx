@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Sparkles, Activity, ShieldAlert, TrendingUp, TrendingDown } from "lucide-react";
 
 import { fetchMarketData, fetchEnsembleSignal, fetchFundamentals } from "@/lib/api";
 import { useMarketWebSocket, usePredictionWebSocket } from "@/lib/useWebSocket";
-import { getCurrencyCode } from "@/lib/utils";
 import { useTradingStyle } from "@/context/TradingStyleContext";
 import TradingStyleSelector from "@/components/trading/TradingStyleSelector";
 import TradingViewChart from "@/components/charts/TradingViewChart";
@@ -16,7 +15,6 @@ import TechnicalSummary from "@/components/technical/TechnicalSummary";
 import FundamentalsIntelligence from "@/components/fundamentals/FundamentalsIntelligence";
 import ModelConsensus from "@/components/ai/ModelConsensus";
 import type { MarketDataResponse, FundamentalsResponse } from "@/types/market";
-
 
 export default function AssetTerminalPage() {
   const params = useParams();
@@ -53,7 +51,6 @@ export default function AssetTerminalPage() {
     }
     loadData();
 
-
     // Periodic live feed update for serverless Vercel environments
     const pollTimer = setInterval(() => {
       if (active) {
@@ -69,7 +66,7 @@ export default function AssetTerminalPage() {
       active = false;
       clearInterval(pollTimer);
     };
-  }, [symbol, timeframe]);
+  }, [symbol, timeframe, style]);
 
   // Determine market currency: Indian market assets should display INR as Rs, international assets stay in USD.
   const isIndian =
@@ -79,6 +76,9 @@ export default function AssetTerminalPage() {
     symbol.includes("RELIANCE") ||
     symbol.includes("INFY") ||
     symbol.includes("TCS") ||
+    symbol.includes("NIFTY") ||
+    symbol.includes("SENSEX") ||
+    symbol.includes("BANKNIFTY") ||
     marketData?.asset_info?.currency === "INR" ||
     marketData?.asset_info?.exchange === "NSE" ||
     marketData?.asset_info?.exchange === "BSE";
@@ -116,6 +116,7 @@ export default function AssetTerminalPage() {
     }
     return "Unavailable";
   })();
+
   const signal = wsPrediction?.signal || signalData?.analysis?.signal || "BUY";
   const confidence = wsPrediction?.confidence || (signalData?.analysis?.confidence ? Math.round(signalData.analysis.confidence * 100) : 82);
   const regime = wsPrediction?.regime || signalData?.analysis?.regime || "BULLISH";
@@ -159,24 +160,24 @@ export default function AssetTerminalPage() {
       <div>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground hover:text-accent transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back to Markets Overview
         </Link>
       </div>
 
       {/* Asset Header Banner */}
-      <div className="p-6 rounded-xl bg-surface border border-border flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-1">
+      <div className="p-6 sm:p-8 rounded-2xl bg-surface/90 glass-card border border-border/80 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xl">
+        <div className="space-y-1.5">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-mono font-bold text-foreground tracking-tight">
+            <h1 className="text-3xl sm:text-4xl font-mono font-bold text-foreground tracking-tight text-gradient-hero">
               {symbol}
             </h1>
-            <span className="px-2.5 py-0.5 rounded text-xs font-mono bg-background border border-border text-muted-foreground">
+            <span className="px-3 py-1 rounded-full text-xs font-mono bg-background/90 border border-border/80 text-foreground font-semibold shadow-sm">
               {marketData?.asset_info?.asset_type || (isIndian ? "STOCK (NSE)" : "CRYPTO")}
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground font-normal">
             {marketData?.asset_info?.name || `${symbol} Quantitative Terminal`} • {marketData?.asset_info?.exchange || (isIndian ? "NSE" : "GLOBAL")}
           </p>
         </div>
@@ -184,10 +185,10 @@ export default function AssetTerminalPage() {
         {/* Live Price & Real-Time Status */}
         <div className="flex items-center gap-6">
           <div className="text-left md:text-right">
-            <span className="text-[10px] font-mono text-muted-foreground uppercase block">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider block">
               Current Live Price
             </span>
-            <span className="text-2xl sm:text-3xl font-mono font-semibold text-foreground tabular-nums tracking-tight">
+            <span className="text-3xl sm:text-4xl font-mono font-bold text-foreground tabular-nums tracking-tight">
               {loading ? (
                 <span className="text-sm font-normal text-muted-foreground animate-pulse">Loading price…</span>
               ) : price !== null && price > 0 ? (
@@ -200,11 +201,11 @@ export default function AssetTerminalPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-background border border-border text-xs font-mono">
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-background border border-border text-xs font-mono shadow-sm">
             <span
-              className={`w-2 h-2 rounded-full ${
+              className={`w-2.5 h-2.5 rounded-full ${
                 dataStatus === "Live"
-                  ? "bg-bullish animate-pulse"
+                  ? "bg-bullish animate-pulse pulse-indicator-live"
                   : dataStatus === "Market Closed"
                   ? "bg-muted-foreground"
                   : dataStatus === "Reconnecting"
@@ -214,26 +215,29 @@ export default function AssetTerminalPage() {
                   : "bg-bearish"
               }`}
             />
-            <span className="text-foreground">{dataStatus}</span>
+            <span className="text-foreground font-semibold">{dataStatus}</span>
           </div>
         </div>
       </div>
 
-      {/* Active Trading Style Horizon Selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-surface border border-border">
-
-        <div className="space-y-0.5">
+      {/* Active Trading Style Horizon Selector Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-surface/80 glass-card border border-border/80 shadow-md">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold text-foreground">TRADING HORIZON:</span>
-            <span className="text-xs font-mono text-accent">{styleInfo.name} ({styleInfo.predictionHorizon})</span>
+            <Sparkles className="w-4 h-4 text-accent" />
+            <span className="text-xs font-mono font-bold text-foreground">ACTIVE TRADING HORIZON:</span>
+            <span className="text-xs font-mono text-accent font-bold px-2 py-0.5 rounded-full bg-accent/15 border border-accent/30">
+              {styleInfo.name} ({styleInfo.predictionHorizon})
+            </span>
           </div>
-          <p className="text-[11px] text-muted-foreground">Recalibrates model features, sequence lengths, stop-loss triggers, and news decay half-life.</p>
+          <p className="text-[11px] text-muted-foreground">
+            Model emphasis: Primary ({styleInfo.modelEmphasis.primary}), Secondary ({styleInfo.modelEmphasis.secondary}), News Half-Life ({styleInfo.newsHalfLife}).
+          </p>
         </div>
         <TradingStyleSelector compact={true} />
       </div>
 
       {/* AI Outlook Component with Real Analysis */}
-
       <AIOutlook
         symbol={symbol}
         signal={signal}
